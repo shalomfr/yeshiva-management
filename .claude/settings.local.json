@@ -40,7 +40,9 @@
       "Bash(netstat:*)",
       "Bash(where:*)",
       "Bash(start http://127.0.0.1:5000/exams/scan)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(timeout /t 2)",
+      "Bash(timeout /t 5)"
     ],
     "deny": [],
     "ask": []

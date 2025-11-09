@@ -197,6 +197,14 @@ body {
     color: #EF5350;
 }
 
+.card-late .card-border {
+    background-color: #FFA726;
+}
+
+.card-late .card-value {
+    color: #FF9800;
+}
+
 .card-warning .card-border {
     background-color: #FFA726;
 }
@@ -1416,6 +1424,19 @@ tbody tr:hover {
 .attendance-cell.absent:hover {
     background-color: #FFCDD2;
     border-color: #C62828;
+    transform: scale(1.05);
+}
+
+.attendance-cell.late {
+    background-color: #FFF3E0;
+    color: #E65100;
+    border: 1px solid #FFA726;
+    font-weight: bold;
+}
+
+.attendance-cell.late:hover {
+    background-color: #FFE0B2;
+    border-color: #E65100;
     transform: scale(1.05);
 }
 

@@ -124,28 +124,136 @@ class YeshivaDatabase:
             )
         ''')
 
-        # טבלת נוכחות חדשה - תומכת בכל התפילות
+        # טבלת הגדרת סשנים (תפילות וסדרי לימוד)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS session_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_name TEXT NOT NULL UNIQUE,
+                category TEXT NOT NULL,
+                display_order INTEGER NOT NULL,
+                icon TEXT,
+                active_days TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # טבלת נוכחות חדשה - תומכת בתפילות וסדרי לימוד
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS attendance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER,
                 date_hebrew TEXT,
                 date_gregorian TEXT,
-                prayer_type TEXT NOT NULL,
-                attended INTEGER DEFAULT 0,
+                session_type TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'תפילה',
+                status TEXT NOT NULL DEFAULT 'חסר',
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-                UNIQUE(student_id, date_gregorian, prayer_type)
+                UNIQUE(student_id, date_gregorian, session_type)
             )
         ''')
 
-        # העתקת נתונים מהטבלה הישנה אם יש
+        # Migration: טיפול בעמודות ישנות אם הטבלה כבר קיימת עם המבנה הישן
+        try:
+            # בדיקה אם יש עמודה ישנה prayer_type (לפני שינוי)
+            cursor.execute("PRAGMA table_info(attendance)")
+            columns = {col[1]: col[2] for col in cursor.fetchall()}
+
+            # אם קיימת עמודה prayer_type, צריך להעביר את הנתונים לטבלה חדשה
+            if 'prayer_type' in columns and 'session_type' not in columns:
+                print("מזהה מבנה ישן - מבצע migration...")
+
+                # גיבוי הנתונים
+                cursor.execute('''
+                    CREATE TEMPORARY TABLE attendance_backup AS
+                    SELECT * FROM attendance
+                ''')
+
+                # מחיקת הטבלה הישנה
+                cursor.execute('DROP TABLE attendance')
+
+                # יצירת הטבלה החדשה
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS attendance (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        student_id INTEGER,
+                        date_hebrew TEXT,
+                        date_gregorian TEXT,
+                        session_type TEXT NOT NULL,
+                        category TEXT NOT NULL DEFAULT 'תפילה',
+                        status TEXT NOT NULL DEFAULT 'חסר',
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+                        UNIQUE(student_id, date_gregorian, session_type)
+                    )
+                ''')
+
+                # העברת הנתונים עם המרה: attended (0/1) → status (חסר/נוכח)
+                cursor.execute('''
+                    INSERT OR IGNORE INTO attendance
+                    (student_id, date_hebrew, date_gregorian, session_type, category, status, notes, created_at)
+                    SELECT
+                        student_id,
+                        date_hebrew,
+                        date_gregorian,
+                        prayer_type,
+                        'תפילה',
+                        CASE WHEN attended = 1 THEN 'נוכח' ELSE 'חסר' END,
+                        notes,
+                        created_at
+                    FROM attendance_backup
+                ''')
+
+                cursor.execute('DROP TABLE attendance_backup')
+                print("Migration הושלם בהצלחה!")
+        except Exception as e:
+            print(f"הערה: {e}")
+            pass
+
+        # העתקת נתונים מהטבלה הישנה shacharit_attendance אם יש
         cursor.execute('''
-            INSERT OR IGNORE INTO attendance (student_id, date_hebrew, date_gregorian, prayer_type, attended, notes, created_at)
-            SELECT student_id, date_hebrew, date_gregorian, 'שחרית', attended, notes, created_at
+            INSERT OR IGNORE INTO attendance (student_id, date_hebrew, date_gregorian, session_type, category, status, notes, created_at)
+            SELECT
+                student_id,
+                date_hebrew,
+                date_gregorian,
+                'שחרית',
+                'תפילה',
+                CASE WHEN attended = 1 THEN 'נוכח' ELSE 'חסר' END,
+                notes,
+                created_at
             FROM shacharit_attendance
         ''')
+
+        # אכלוס הגדרות הסשנים (תפילות + סדרי לימוד)
+        import json
+
+        sessions_to_add = [
+            # תפילות (3)
+            ('שחרית', 'תפילה', 1, '🌅', json.dumps([0,1,2,3,4,5,6])),  # כל יום
+            ('מנחה', 'תפילה', 2, '☀️', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+            ('מעריב', 'תפילה', 3, '🌙', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+
+            # סדרי לימוד (9)
+            ('שיעור בקיאות', 'לימוד', 4, '📖', json.dumps([0,1,2,3,4,5,6])),  # כל יום
+            ('סדר א\' - חזרה עיון', 'לימוד', 5, '📝', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+            ('שיעור עיון', 'לימוד', 6, '📚', json.dumps([0,1,2,3,4,5,6])),  # כל יום
+            ('שיעור עיון 2', 'לימוד', 7, '📘', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+            ('שיעור גמרא רש"י', 'לימוד', 8, '📜', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+            ('שיעור חומש רש"י', 'לימוד', 9, '📕', json.dumps([0,1,2,5])),  # ראשון-שלישי + שישי
+            ('הלכה', 'לימוד', 10, '⚖️', json.dumps([3,4])),  # רביעי-חמישי
+            ('סדר ב\' - חזרה בקיאות', 'לימוד', 11, '🔄', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+            ('סדר ג\' - הכנה עיון', 'לימוד', 12, '📋', json.dumps([0,1,2,3,4])),  # ראשון-חמישי
+        ]
+
+        for session_name, category, display_order, icon, active_days in sessions_to_add:
+            cursor.execute('''
+                INSERT OR IGNORE INTO session_definitions
+                (session_name, category, display_order, icon, active_days)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (session_name, category, display_order, icon, active_days))
 
         # ===== טבלאות מבחנים =====
 
@@ -394,20 +502,30 @@ class YeshivaDatabase:
         conn.commit()
         conn.close()
 
-    def save_attendance(self, student_id, date_hebrew, date_gregorian, attended, prayer_type='שחרית'):
-        """שמירת נוכחות - תומך בכל התפילות"""
+    def save_attendance(self, student_id, date_hebrew, date_gregorian, status, session_type='שחרית', category='תפילה'):
+        """שמירת נוכחות - תומך בתפילות וסדרי לימוד
+
+        Args:
+            student_id: מזהה תלמיד
+            date_hebrew: תאריך עברי
+            date_gregorian: תאריך גרגוריאני
+            status: 'נוכח', 'חסר', או 'איחור'
+            session_type: שם הסשן (תפילה או סדר לימוד)
+            category: 'תפילה' או 'לימוד'
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
 
         # שמירה בטבלה החדשה
         cursor.execute('''
             INSERT OR REPLACE INTO attendance
-            (student_id, date_hebrew, date_gregorian, prayer_type, attended)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (student_id, date_hebrew, date_gregorian, prayer_type, attended))
+            (student_id, date_hebrew, date_gregorian, session_type, category, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (student_id, date_hebrew, date_gregorian, session_type, category, status))
 
         # שמירה גם בטבלה הישנה אם זה שחרית (לשמירה לאחור)
-        if prayer_type == 'שחרית':
+        if session_type == 'שחרית':
+            attended = 1 if status == 'נוכח' else 0
             cursor.execute('''
                 INSERT OR REPLACE INTO shacharit_attendance
                 (student_id, date_hebrew, date_gregorian, attended)
@@ -417,17 +535,21 @@ class YeshivaDatabase:
         conn.commit()
         conn.close()
 
-    def get_attendance(self, student_id, date_hebrew, prayer_type='שחרית'):
-        """קבלת נוכחות לתאריך מסוים - תומך בכל התפילות"""
+    def get_attendance(self, student_id, date_hebrew, session_type='שחרית'):
+        """קבלת נוכחות לתאריך וסשן מסוים
+
+        Returns:
+            'נוכח', 'חסר', 'איחור', או None אם לא קיים
+        """
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT attended FROM attendance
-            WHERE student_id = ? AND date_hebrew = ? AND prayer_type = ?
-        ''', (student_id, date_hebrew, prayer_type))
+            SELECT status FROM attendance
+            WHERE student_id = ? AND date_hebrew = ? AND session_type = ?
+        ''', (student_id, date_hebrew, session_type))
         result = cursor.fetchone()
         conn.close()
-        return result[0] if result else 0
+        return result[0] if result else None
 
     def get_week_attendance(self, start_date_hebrew, end_date_hebrew):
         """קבלת נוכחות לשבוע"""
@@ -478,8 +600,12 @@ class YeshivaDatabase:
             'percentage': percentage
         }
 
-    def get_attendance_for_date(self, gregorian_date, prayer_type='שחרית'):
-        """קבלת רשימת נוכחות לתאריך מסוים (כל התלמידים) - תומך בכל התפילות"""
+    def get_attendance_for_date(self, gregorian_date, session_type='שחרית'):
+        """קבלת רשימת נוכחות לתאריך וסשן מסוים (כל התלמידים)
+
+        Returns:
+            List of tuples: [(student_id, date_hebrew, status), ...]
+        """
         from pyluach import dates
 
         # Convert gregorian date to hebrew date string
@@ -489,12 +615,88 @@ class YeshivaDatabase:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT student_id, date_hebrew, CASE WHEN attended = 1 THEN 'נוכח' ELSE 'חסר' END as status
+            SELECT student_id, date_hebrew, status
             FROM attendance
-            WHERE date_hebrew = ? AND prayer_type = ?
-        ''', (date_hebrew, prayer_type))
+            WHERE date_hebrew = ? AND session_type = ?
+        ''', (date_hebrew, session_type))
         results = cursor.fetchall()
         conn.close()
+
+        return results
+
+    def get_all_sessions(self):
+        """קבלת כל הסשנים (תפילות + סדרי לימוד)
+
+        Returns:
+            List of dicts with session info
+        """
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, session_name, category, display_order, icon, active_days
+            FROM session_definitions
+            ORDER BY display_order
+        ''')
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        # המרת active_days מ-JSON למערך
+        import json
+        for session in results:
+            session['active_days'] = json.loads(session['active_days'])
+
+        return results
+
+    def get_sessions_for_date(self, weekday):
+        """קבלת סשנים פעילים ליום מסוים
+
+        Args:
+            weekday: 0=ראשון, 1=שני, ..., 6=שבת
+
+        Returns:
+            List of active sessions for this day
+        """
+        import json
+        all_sessions = self.get_all_sessions()
+
+        # סינון לפי יום
+        active_sessions = [
+            session for session in all_sessions
+            if weekday in session['active_days']
+        ]
+
+        return active_sessions
+
+    def get_sessions_by_category(self, category):
+        """קבלת סשנים לפי קטגוריה
+
+        Args:
+            category: 'תפילה' או 'לימוד'
+
+        Returns:
+            List of sessions in this category
+        """
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, session_name, category, display_order, icon, active_days
+            FROM session_definitions
+            WHERE category = ?
+            ORDER BY display_order
+        ''', (category,))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        # המרת active_days מ-JSON למערך
+        import json
+        for session in results:
+            session['active_days'] = json.loads(session['active_days'])
 
         return results
 

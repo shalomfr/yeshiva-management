@@ -30,6 +30,15 @@
             </div>
         </div>
 
+        <!-- Late -->
+        <div class="stat-card card-late">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="lateCount">0</div>
+                <div class="card-label">איחורים</div>
+            </div>
+        </div>
+
         <!-- Absent -->
         <div class="stat-card card-danger">
             <div class="card-border"></div>
@@ -71,20 +80,21 @@
         </button>
     </div>
 
-    <!-- Prayer Selector Tabs -->
-    <div class="prayer-selector">
-        <button class="prayer-tab active" onclick="selectPrayer('שחרית')" data-prayer="שחרית">
-            <span class="prayer-icon">🌅</span>
-            <span class="prayer-label">שחרית</span>
+    <!-- Category Selector -->
+    <div class="category-selector" style="display: flex; gap: 10px; margin: 20px 15px 10px 15px;">
+        <button class="category-tab active" onclick="selectCategory('תפילה')" data-category="תפילה" style="flex: 1; padding: 12px; border: 2px solid #5B8FDE; border-radius: 8px; background: #5B8FDE; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;">
+            <span class="category-icon">🕌</span>
+            <span class="category-label">תפילות</span>
         </button>
-        <button class="prayer-tab" onclick="selectPrayer('מנחה')" data-prayer="מנחה">
-            <span class="prayer-icon">☀️</span>
-            <span class="prayer-label">מנחה</span>
+        <button class="category-tab" onclick="selectCategory('לימוד')" data-category="לימוד" style="flex: 1; padding: 12px; border: 2px solid #5B8FDE; border-radius: 8px; background: white; color: #5B8FDE; font-weight: 600; cursor: pointer; transition: all 0.3s;">
+            <span class="category-icon">📚</span>
+            <span class="category-label">סדרי לימוד</span>
         </button>
-        <button class="prayer-tab" onclick="selectPrayer('מעריב')" data-prayer="מעריב">
-            <span class="prayer-icon">🌙</span>
-            <span class="prayer-label">מעריב</span>
-        </button>
+    </div>
+
+    <!-- Session Selector Tabs (Dynamic) -->
+    <div class="prayer-selector" id="sessionSelector">
+        <!-- יתמלא דינמית מה-API -->
     </div>
 
     <!-- Lesson Selector Tabs -->
@@ -215,7 +225,10 @@
     let weekStartDate = getStartOfWeek(new Date());
     let weeklyData = {};
     let selectedClass = "א'";
-    let selectedPrayer = 'שחרית';
+    let selectedSession = 'שחרית';
+    let selectedCategory = 'תפילה';
+    let allSessions = [];
+    let currentCategorySessions = [];
 
     function getWeekDates(startDate) {
         const dates = [];
@@ -236,13 +249,71 @@
         return students.filter(student => student.grade === classGrade);
     }
 
-    function selectPrayer(prayer) {
-        selectedPrayer = prayer;
+    function selectSession(sessionName) {
+        selectedSession = sessionName;
         document.querySelectorAll('.prayer-tab').forEach(tab => tab.classList.remove('active'));
         event.target.closest('.prayer-tab').classList.add('active');
 
-        // Reload data for the new prayer
+        // Reload data for the new session
         loadWeeklyAttendance();
+    }
+
+    function selectCategory(category) {
+        selectedCategory = category;
+
+        // Update category tabs
+        document.querySelectorAll('.category-tab').forEach(tab => {
+            tab.classList.remove('active');
+            if (tab.dataset.category === category) {
+                tab.classList.add('active');
+                tab.style.background = '#5B8FDE';
+                tab.style.color = 'white';
+            } else {
+                tab.style.background = 'white';
+                tab.style.color = '#5B8FDE';
+            }
+        });
+
+        // Load sessions for this category
+        loadSessionsForCategory(category);
+    }
+
+    function loadSessionsForCategory(category) {
+        currentCategorySessions = allSessions.filter(s => s.category === category);
+
+        // Render session tabs
+        const sessionSelector = document.getElementById('sessionSelector');
+        if (currentCategorySessions.length === 0) {
+            sessionSelector.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">אין סשנים בקטגוריה זו</div>';
+            return;
+        }
+
+        sessionSelector.innerHTML = currentCategorySessions.map((session, index) => {
+            const isActive = index === 0 ? 'active' : '';
+            return `
+                <button class="prayer-tab ${isActive}" onclick="selectSession('${session.session_name}')" data-session="${session.session_name}">
+                    <span class="prayer-icon">${session.icon}</span>
+                    <span class="prayer-label">${session.session_name}</span>
+                </button>
+            `;
+        }).join('');
+
+        // Select first session
+        if (currentCategorySessions.length > 0) {
+            selectedSession = currentCategorySessions[0].session_name;
+            loadWeeklyAttendance();
+        }
+    }
+
+    function loadAllSessions() {
+        fetch('/api/sessions')
+            .then(response => response.json())
+            .then(sessions => {
+                allSessions = sessions;
+                // Load תפילה category first
+                loadSessionsForCategory('תפילה');
+            })
+            .catch(error => console.error('Error loading sessions:', error));
     }
 
     function selectClass(classGrade) {
@@ -256,7 +327,7 @@
 
     function updateTitle() {
         const lessonLabel = selectedClass === "א'" ? 'שיעור א' : selectedClass === "ב'" ? 'שיעור ב' : 'שיעור ג';
-        document.getElementById('classTitle').textContent = `נוכחות ${selectedPrayer} - ${lessonLabel}`;
+        document.getElementById('classTitle').textContent = `נוכחות ${selectedSession} - ${lessonLabel}`;
     }
 
     function loadWeeklyAttendance() {
@@ -266,7 +337,7 @@
 
         weekDates.forEach(date => {
             const dateStr = formatDate(date);
-            fetch(`/api/attendance/${dateStr}/${selectedPrayer}`)
+            fetch(`/api/attendance/${dateStr}/${selectedSession}`)
                 .then(response => response.json())
                 .then(data => {
                     weeklyData[dateStr] = data;
@@ -328,8 +399,20 @@
                 const studentData = dayData.students.find(s => s.id === student.id);
                 const status = studentData ? studentData.status : 'ממתין';
 
-                const statusClass = status === 'נוכח' ? 'present' : status === 'חסר' ? 'absent' : 'unmarked';
-                const symbol = status === 'נוכח' ? '✓' : status === 'חסר' ? '✗' : '';
+                let statusClass, symbol;
+                if (status === 'נוכח') {
+                    statusClass = 'present';
+                    symbol = '✓';
+                } else if (status === 'איחור') {
+                    statusClass = 'late';
+                    symbol = '⏰';
+                } else if (status === 'חסר') {
+                    statusClass = 'absent';
+                    symbol = '✗';
+                } else {
+                    statusClass = 'unmarked';
+                    symbol = '';
+                }
 
                 rowHtml += `<td class="attendance-cell ${statusClass}" onclick="toggleAttendance(${student.id}, '${dateStr}', this)">${symbol}</td>`;
             });
@@ -348,32 +431,36 @@
         const student = dayData.students.find(s => s.id === studentId);
         if (!student) return;
 
+        // מחזור תלת-מצבי: ממתין → נוכח → איחור → חסר → ממתין
         let newStatus;
-        if (student.status === 'נוכח') {
-            newStatus = 0;
-        } else if (student.status === 'חסר') {
-            newStatus = null;
+        if (!student.status || student.status === null) {
+            newStatus = 'נוכח';
+        } else if (student.status === 'נוכח') {
+            newStatus = 'איחור';
+        } else if (student.status === 'איחור') {
+            newStatus = 'חסר';
         } else {
-            newStatus = 1;
+            newStatus = null;  // חזרה לממתין
         }
 
         markAttendance(studentId, dateStr, newStatus, cellElement);
     }
 
     function markAttendance(studentId, dateStr, status, cellElement) {
-        const statusText = status === 1 ? 'נוכח' : status === 0 ? 'חסר' : 'ממתין';
-
         const dayData = weeklyData[dateStr];
         const student = dayData.students.find(s => s.id === studentId);
         if (student) {
-            student.status = statusText;
+            student.status = status;
         }
 
         cellElement.className = 'attendance-cell';
-        if (status === 1) {
+        if (status === 'נוכח') {
             cellElement.textContent = '✓';
             cellElement.classList.add('present');
-        } else if (status === 0) {
+        } else if (status === 'איחור') {
+            cellElement.textContent = '⏰';
+            cellElement.classList.add('late');
+        } else if (status === 'חסר') {
             cellElement.textContent = '✗';
             cellElement.classList.add('absent');
         } else {
@@ -389,7 +476,8 @@
                     student_id: studentId,
                     date: dateStr,
                     status: status,
-                    prayer_type: selectedPrayer
+                    session_type: selectedSession,
+                    category: selectedCategory
                 })
             }).catch(error => console.error('Error:', error));
         }
@@ -432,8 +520,9 @@
                             body: JSON.stringify({
                                 student_id: student.id,
                                 date: dateStr,
-                                status: 1,
-                                prayer_type: selectedPrayer
+                                status: 'נוכח',
+                                session_type: selectedSession,
+                                category: selectedCategory
                             })
                         });
                     }
@@ -464,8 +553,9 @@
                             body: JSON.stringify({
                                 student_id: student.id,
                                 date: dateStr,
-                                status: 0,
-                                prayer_type: selectedPrayer
+                                status: 'חסר',
+                                session_type: selectedSession,
+                                category: selectedCategory
                             })
                         });
                     }
@@ -482,7 +572,7 @@
         const firstData = weeklyData[firstDate] || { students: [] };
         const classStudents = getClassStudents(firstData.students, selectedClass);
 
-        let totalPresent = 0, totalAbsent = 0, totalUnmarked = 0;
+        let totalPresent = 0, totalAbsent = 0, totalLate = 0, totalUnmarked = 0;
 
         classStudents.forEach(student => {
             weekDates.forEach(date => {
@@ -492,16 +582,18 @@
                 const status = studentData ? studentData.status : 'ממתין';
 
                 if (status === 'נוכח') totalPresent++;
+                else if (status === 'איחור') totalLate++;
                 else if (status === 'חסר') totalAbsent++;
                 else totalUnmarked++;
             });
         });
 
         document.getElementById('presentCount').textContent = totalPresent;
+        document.getElementById('lateCount').textContent = totalLate;
         document.getElementById('absentCount').textContent = totalAbsent;
         document.getElementById('unmarkedCount').textContent = totalUnmarked;
 
-        const totalMarked = totalPresent + totalAbsent;
+        const totalMarked = totalPresent + totalAbsent + totalLate;
         const percentage = totalMarked > 0 ? Math.round((totalPresent / totalMarked) * 100) : 0;
         document.getElementById('percentCount').textContent = percentage + '%';
 
@@ -513,7 +605,9 @@
         });
     }
 
-    window.addEventListener('load', loadWeeklyAttendance);
+    window.addEventListener('load', () => {
+        loadAllSessions();  // טוען את כל הסשנים קודם
+    });
 </script>
 
 <!-- Rapid Filling Script -->

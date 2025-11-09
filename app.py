@@ -130,12 +130,12 @@ def api_get_students():
     return jsonify(filtered)
 
 @app.route('/api/attendance/<date>')
-@app.route('/api/attendance/<date>/<prayer>')
-def api_get_attendance(date, prayer='שחרית'):
-    """API: קבלת נוכחות לתאריך ותפילה"""
+@app.route('/api/attendance/<date>/<session>')
+def api_get_attendance(date, session='שחרית'):
+    """API: קבלת נוכחות לתאריך וסשן (תפילה או סדר לימוד)"""
     try:
         gregorian_date = datetime.strptime(date, '%Y-%m-%d').date()
-        attendance_data = db.get_attendance_for_date(gregorian_date, prayer)
+        attendance_data = db.get_attendance_for_date(gregorian_date, session)
 
         heb_date = dates.HebrewDate.from_pydate(gregorian_date)
 
@@ -143,7 +143,8 @@ def api_get_attendance(date, prayer='שחרית'):
         total_students = len(students)
         present_count = len([a for a in attendance_data if a[2] == 'נוכח'])
         absent_count = len([a for a in attendance_data if a[2] == 'חסר'])
-        unmarked = total_students - present_count - absent_count
+        late_count = len([a for a in attendance_data if a[2] == 'איחור'])
+        unmarked = total_students - present_count - absent_count - late_count
 
         if total_students > 0:
             attendance_percent = int((present_count / total_students) * 100)
@@ -155,8 +156,10 @@ def api_get_attendance(date, prayer='שחרית'):
             'hebrew_date': heb_date.hebrew_date_string(),
             'present': present_count,
             'absent': absent_count,
+            'late': late_count,
             'unmarked': unmarked,
             'percent': attendance_percent,
+            'session': session,
             'students': []
         }
 
@@ -203,13 +206,14 @@ def api_get_rapid_filling(date, prayer='שחרית'):
 
 @app.route('/api/attendance/mark', methods=['POST'])
 def api_mark_attendance():
-    """API: סימון נוכחות - תומך בכל התפילות"""
+    """API: סימון נוכחות - תומך בתפילות וסדרי לימוד"""
     try:
         data = request.json
         student_id = data.get('student_id')
         date = data.get('date')
-        status = data.get('status')  # 1 for present, 0 for absent
-        prayer_type = data.get('prayer_type', 'שחרית')  # ברירת מחדל: שחרית
+        status_value = data.get('status')  # Can be: 1/0 (old format) or 'נוכח'/'חסר'/'איחור' (new format)
+        session_type = data.get('session_type') or data.get('prayer_type', 'שחרית')  # תמיכה לאחור
+        category = data.get('category', 'תפילה')
 
         gregorian_date = datetime.strptime(date, '%Y-%m-%d').date()
 
@@ -217,7 +221,13 @@ def api_mark_attendance():
         from services.date_service import HebrewDateConverter
         heb_date = HebrewDateConverter.get_hebrew_date(gregorian_date)
 
-        db.save_attendance(student_id, heb_date, date, status, prayer_type)
+        # תמיכה לאחור: המרה מ-1/0 ל-'נוכח'/'חסר'
+        if isinstance(status_value, int):
+            status = 'נוכח' if status_value == 1 else 'חסר'
+        else:
+            status = status_value
+
+        db.save_attendance(student_id, heb_date, date, status, session_type, category)
 
         return jsonify({'success': True})
     except Exception as e:
@@ -243,6 +253,44 @@ def api_get_classes():
         })
 
     return jsonify(result)
+
+@app.route('/api/sessions')
+def api_get_all_sessions():
+    """API: קבלת כל הסשנים (תפילות + סדרי לימוד)"""
+    try:
+        sessions = db.get_all_sessions()
+        return jsonify(sessions)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/sessions/<date>')
+def api_get_sessions_for_date(date):
+    """API: קבלת סשנים פעילים לתאריך מסוים"""
+    try:
+        gregorian_date = datetime.strptime(date, '%Y-%m-%d').date()
+        weekday = gregorian_date.weekday()  # 0=Monday, 6=Sunday
+
+        # המרה ליום עברי: 0=ראשון, 6=שבת
+        hebrew_weekday = (weekday + 1) % 7
+
+        active_sessions = db.get_sessions_for_date(hebrew_weekday)
+
+        return jsonify({
+            'date': date,
+            'weekday': hebrew_weekday,
+            'sessions': active_sessions
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/sessions/category/<category>')
+def api_get_sessions_by_category(category):
+    """API: קבלת סשנים לפי קטגוריה (תפילה/לימוד)"""
+    try:
+        sessions = db.get_sessions_by_category(category)
+        return jsonify(sessions)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/export/csv')
 def api_export_csv():
