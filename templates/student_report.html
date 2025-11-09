@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+
+{% block title %}דוח תלמיד פרטי - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="student-report-container">
+    <div class="page-header">
+        <h1>דוח תלמיד פרטי</h1>
+        <p>הפק דוח מפורט עבור תלמיד</p>
+    </div>
+
+    <div class="content-card">
+        <h2 class="card-title">בחירת תלמיד ופרמטרים</h2>
+        
+        <div class="form-section">
+            <div class="form-row">
+                <div class="field">
+                    <label>בחר תלמיד</label>
+                    <div class="select">
+                        <select id="studentSelect" onchange="loadStudentData()">
+                            <option value="">בחר תלמיד...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="reportForm" style="display: none;">
+                <!-- Date Range -->
+                <div class="form-row" style="margin-top: 20px;">
+                    <div class="field">
+                        <label>טווח תאריכים לנוכחות</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="text" id="startDate" placeholder="מתאריך" style="flex: 1;">
+                            <span>-</span>
+                            <input type="text" id="endDate" placeholder="עד תאריך" style="flex: 1;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intro Text -->
+                <div class="form-row" style="margin-top: 20px;">
+                    <div class="field">
+                        <label>טקסט הקדמה (יופיע לפני טבלת הציונים)</label>
+                        <textarea id="introText" rows="4" placeholder='לדוגמה: "התלמיד מתקדם היטב בלימודיו ומראה שקידה ומסירות..."' style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-family: inherit;"></textarea>
+                    </div>
+                </div>
+
+                <!-- Exams Section -->
+                <div style="margin-top: 30px;">
+                    <h3 style="margin-bottom: 15px;">ציוני מבחנים</h3>
+                    <p style="font-size: 13px; color: #4A90E2; margin-bottom: 10px;">
+                        ℹ️ הציונים נשלפו אוטומטית מהמערכת. ניתן לערוך או להוסיף ציונים ידנית.
+                    </p>
+                    
+                    <table class="reports-table" id="examsTable" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>עיון</th>
+                                <th>בקיאות</th>
+                                <th>גמרא רשי</th>
+                                <th>חומש</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="number" id="gradeIyon" min="0" max="100" placeholder="0-100" style="width: 100%; padding: 8px; text-align: center;"></td>
+                                <td><input type="number" id="gradeBekiut" min="0" max="100" placeholder="0-100" style="width: 100%; padding: 8px; text-align: center;"></td>
+                                <td><input type="number" id="gradeGemaraRashi" min="0" max="100" placeholder="0-100" style="width: 100%; padding: 8px; text-align: center;"></td>
+                                <td><input type="number" id="gradeChumash" min="0" max="100" placeholder="0-100" style="width: 100%; padding: 8px; text-align: center;"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="margin-top: 30px; display: flex; gap: 10px; justify-content: center;">
+                    <button onclick="previewReport()" class="btn btn-primary">
+                        👁️ תצוגה מקדימה
+                    </button>
+                    <button onclick="downloadPDF()" class="btn btn-success">
+                        📄 הורד PDF
+                    </button>
+                    <button onclick="printReport()" class="btn btn-secondary">
+                        🖨️ הדפס
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div id="previewModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header">
+            <h2>תצוגה מקדימה</h2>
+            <span class="close" onclick="closePreview()">&times;</span>
+        </div>
+        <div class="modal-body" id="previewContent">
+            <!-- Preview will be loaded here -->
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closePreview()">סגור</button>
+            <button class="btn btn-primary" onclick="printFromPreview()">הדפס</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentStudentId = null;
+    let studentData = null;
+    let examRows = [];
+
+    // Load students on page load
+    window.addEventListener('load', function() {
+        loadStudentsList();
+        initializeDates();
+        
+        // Check if student_id in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentId = urlParams.get('student_id');
+        if (studentId) {
+            document.getElementById('studentSelect').value = studentId;
+            loadStudentData();
+        }
+    });
+
+    function loadStudentsList() {
+        fetch('/api/students')
+            .then(r => r.json())
+            .then(data => {
+                const select = document.getElementById('studentSelect');
+                select.innerHTML = '<option value="">בחר תלמיד...</option>';
+                data.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student.id;
+                    option.textContent = `${student.first_name} ${student.last_name} - שיעור ${student.grade}`;
+                    select.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error loading students:', error));
+    }
+
+    function initializeDates() {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        const formatDate = (d) => {
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yy = d.getFullYear();
+            return `${dd}/${mm}/${yy}`;
+        };
+        
+        document.getElementById('startDate').value = formatDate(firstDay);
+        document.getElementById('endDate').value = formatDate(today);
+    }
+
+    function loadStudentData() {
+        const studentId = document.getElementById('studentSelect').value;
+        if (!studentId) {
+            document.getElementById('reportForm').style.display = 'none';
+            return;
+        }
+
+        currentStudentId = studentId;
+        
+        fetch(`/api/student-report-data/${studentId}`)
+            .then(r => r.json())
+            .then(data => {
+                studentData = data;
+                document.getElementById('reportForm').style.display = 'block';
+                
+                // Populate exams table with data from database
+                const exams = data.exams || {};
+                document.getElementById('gradeIyon').value = exams.iyon?.grade || '';
+                document.getElementById('gradeBekiut').value = exams.bekiut?.grade || '';
+                document.getElementById('gradeGemaraRashi').value = exams.gemara_rashi?.grade || '';
+                document.getElementById('gradeChumash').value = exams.chumash?.grade || '';
+            })
+            .catch(error => {
+                console.error('Error loading student data:', error);
+                alert('שגיאה בטעינת נתוני התלמיד');
+            });
+    }
+
+    function populateExamsTable(exams) {
+        // הציונים יוצגו בפורמט אופקי - מקצוע בכותרת
+        // הפונקציה הזו לא בשימוש יותר - הציונים נטענים ישירות ב-loadStudentData
+    }
+
+    function collectExamsData() {
+        // איסוף הציונים בפורמט החדש
+        return {
+            iyon: document.getElementById('gradeIyon').value || '',
+            bekiut: document.getElementById('gradeBekiut').value || '',
+            gemara_rashi: document.getElementById('gradeGemaraRashi').value || '',
+            chumash: document.getElementById('gradeChumash').value || ''
+        };
+    }
+
+    function previewReport() {
+        if (!currentStudentId) {
+            alert('נא לבחור תלמיד');
+            return;
+        }
+
+        const reportData = {
+            student_id: currentStudentId,
+            intro_text: document.getElementById('introText').value,
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            exams: collectExamsData()
+        };
+
+        fetch('/api/student-report/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reportData)
+        })
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('previewContent').innerHTML = html;
+            document.getElementById('previewModal').style.display = 'block';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('שגיאה בהצגת תצוגה מקדימה');
+        });
+    }
+
+    function closePreview() {
+        document.getElementById('previewModal').style.display = 'none';
+    }
+
+    function printFromPreview() {
+        const content = document.getElementById('previewContent').innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="he" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <link rel="stylesheet" href="/static/css/print.css">
+                <style>
+                    body { font-family: 'Segoe UI', Arial, sans-serif; }
+                </style>
+            </head>
+            <body>
+                ${content}
+                <script>
+                    window.onload = function() { 
+                        window.print(); 
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
+    function downloadPDF() {
+        if (!currentStudentId) {
+            alert('נא לבחור תלמיד');
+            return;
+        }
+
+        const reportData = {
+            student_id: currentStudentId,
+            intro_text: document.getElementById('introText').value,
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            exams: collectExamsData()
+        };
+
+        // Show loading
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '⏳ מכין PDF...';
+        btn.disabled = true;
+
+        fetch('/api/student-report/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reportData)
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('שגיאה ביצירת PDF');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `דוח_תלמיד_${studentData.name.replace(/ /g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            btn.textContent = originalText;
+            btn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('שגיאה בהורדת PDF. נא לנסות את אפשרות ההדפסה.');
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    function printReport() {
+        if (!currentStudentId) {
+            alert('נא לבחור תלמיד');
+            return;
+        }
+
+        const reportData = {
+            student_id: currentStudentId,
+            intro_text: document.getElementById('introText').value,
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            exams: collectExamsData()
+        };
+
+        // Open in new window for printing
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/student-report/print';
+        form.target = '_blank';
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'report_data';
+        input.value = JSON.stringify(reportData);
+        form.appendChild(input);
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+</script>
+
+<style>
+    .form-section {
+        padding: 20px;
+    }
+    
+    .form-row {
+        margin-bottom: 20px;
+    }
+    
+    .field label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .field input[type="text"],
+    .field .select select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 14px;
+    }
+    
+    .reports-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    
+    .reports-table th,
+    .reports-table td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: center;
+    }
+    
+    .reports-table th {
+        background: #4A90E2;
+        color: white;
+        font-weight: 600;
+    }
+    
+    .reports-table input {
+        border: 1px solid #ddd;
+        padding: 5px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}

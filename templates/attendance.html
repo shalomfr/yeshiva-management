@@ -82,12 +82,12 @@
 
     <!-- Category Selector -->
     <div class="category-selector" style="display: flex; gap: 10px; margin: 20px 15px 10px 15px;">
-        <button class="category-tab active" onclick="selectCategory('תפילה')" data-category="תפילה" style="flex: 1; padding: 12px; border: 2px solid #5B8FDE; border-radius: 8px; background: #5B8FDE; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s;">
-            <span class="category-icon">🕌</span>
+        <button class="category-tab active" data-category="תפילה" style="flex: 1; padding: 20px 12px; border: 2px solid #5B8FDE; border-radius: 8px; background: #5B8FDE; color: white; font-weight: 600; font-size: 22px; cursor: pointer; transition: all 0.3s;">
+            <span class="category-icon" style="font-size: 32px;">🕌</span>
             <span class="category-label">תפילות</span>
         </button>
-        <button class="category-tab" onclick="selectCategory('לימוד')" data-category="לימוד" style="flex: 1; padding: 12px; border: 2px solid #5B8FDE; border-radius: 8px; background: white; color: #5B8FDE; font-weight: 600; cursor: pointer; transition: all 0.3s;">
-            <span class="category-icon">📚</span>
+        <button class="category-tab" data-category="לימוד" style="flex: 1; padding: 20px 12px; border: 2px solid #5B8FDE; border-radius: 8px; background: white; color: #5B8FDE; font-weight: 600; font-size: 22px; cursor: pointer; transition: all 0.3s;">
+            <span class="category-icon" style="font-size: 32px;">📚</span>
             <span class="category-label">סדרי לימוד</span>
         </button>
     </div>
@@ -99,17 +99,17 @@
 
     <!-- Lesson Selector Tabs -->
     <div class="class-selector">
-        <button class="class-tab active" onclick="selectClass(&quot;א'&quot;)">
+        <button class="class-tab active" data-class="א'">
             <span class="class-letter">א</span>
             <span class="class-label">שיעור א</span>
             <span class="class-count" id="countא">0</span>
         </button>
-        <button class="class-tab" onclick="selectClass(&quot;ב'&quot;)">
+        <button class="class-tab" data-class="ב'">
             <span class="class-letter">ב</span>
             <span class="class-label">שיעור ב</span>
             <span class="class-count" id="countב">0</span>
         </button>
-        <button class="class-tab" onclick="selectClass(&quot;ג'&quot;)">
+        <button class="class-tab" data-class="ג'">
             <span class="class-letter">ג</span>
             <span class="class-label">שיעור ג</span>
             <span class="class-count" id="countג">0</span>
@@ -290,13 +290,25 @@
 
         sessionSelector.innerHTML = currentCategorySessions.map((session, index) => {
             const isActive = index === 0 ? 'active' : '';
+            // Use session ID instead of name to avoid quote issues
             return `
-                <button class="prayer-tab ${isActive}" onclick="selectSession('${session.session_name}')" data-session="${session.session_name}">
+                <button class="prayer-tab ${isActive}" data-session-id="${session.id}">
                     <span class="prayer-icon">${session.icon}</span>
                     <span class="prayer-label">${session.session_name}</span>
                 </button>
             `;
         }).join('');
+
+        // Add click event listeners to all session tabs
+        document.querySelectorAll('.prayer-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const sessionId = parseInt(this.getAttribute('data-session-id'));
+                const session = allSessions.find(s => s.id === sessionId);
+                if (session) {
+                    selectSession(session.session_name);
+                }
+            });
+        });
 
         // Select first session
         if (currentCategorySessions.length > 0) {
@@ -378,7 +390,8 @@
             const dayData = weeklyData[dateStr] || {};
             const dayName = getHebrewDayName(date.getDay());
             const hebrewDate = dayData.hebrew_date || '';
-            headerRow.innerHTML += `<th class="day-col" title="${hebrewDate}">${dayName}<br><small>${hebrewDate}</small></th>`;
+            const escapedHebrewDate = hebrewDate.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            headerRow.innerHTML += `<th class="day-col" title="${escapedHebrewDate}">${dayName}<br><small>${hebrewDate}</small></th>`;
         });
 
         const firstDate = formatDate(weekDates[0]);
@@ -405,7 +418,8 @@
                     symbol = '✓';
                 } else if (status === 'איחור') {
                     statusClass = 'late';
-                    symbol = '⏰';
+                    const lateTime = studentData?.late_time || '';
+                    symbol = `<input type="time" value="${lateTime}" class="late-time-input" onclick="event.stopPropagation()" onchange="saveLateTime(${student.id}, '${dateStr}', this.value)" style="width: 70px; padding: 2px; text-align: center; border: 1px solid #FFA726; border-radius: 4px;">`;
                 } else if (status === 'חסר') {
                     statusClass = 'absent';
                     symbol = '✗';
@@ -458,7 +472,7 @@
             cellElement.textContent = '✓';
             cellElement.classList.add('present');
         } else if (status === 'איחור') {
-            cellElement.textContent = '⏰';
+            cellElement.innerHTML = `<input type="time" class="late-time-input" onclick="event.stopPropagation()" onchange="saveLateTime(${studentId}, '${dateStr}', this.value)" style="width: 70px; padding: 2px; text-align: center; border: 1px solid #FFA726; border-radius: 4px;">`;
             cellElement.classList.add('late');
         } else if (status === 'חסר') {
             cellElement.textContent = '✗';
@@ -566,6 +580,30 @@
         displayWeeklyTable();
     }
 
+    function saveLateTime(studentId, dateStr, time) {
+        // שמירת שעת האיחור
+        const dayData = weeklyData[dateStr];
+        if (dayData) {
+            const student = dayData.students.find(s => s.id === studentId);
+            if (student) {
+                student.late_time = time;
+            }
+        }
+
+        // שליחה לשרת
+        fetch('/api/attendance/late-time', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_id: studentId,
+                date: dateStr,
+                late_time: time,
+                session_type: selectedSession,
+                category: selectedCategory
+            })
+        }).catch(error => console.error('Error saving late time:', error));
+    }
+
     function updateStats() {
         const weekDates = getWeekDates(weekStartDate);
         const firstDate = formatDate(weekDates[0]);
@@ -606,7 +644,45 @@
     }
 
     window.addEventListener('load', () => {
-        loadAllSessions();  // טוען את כל הסשנים קודם
+        // Add event listeners to category tabs
+        document.querySelectorAll('.category-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                selectCategory(this.getAttribute('data-category'));
+            });
+        });
+
+        // Add event listeners to class tabs
+        document.querySelectorAll('.class-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                selectClass(this.getAttribute('data-class'));
+            });
+        });
+
+        // קריאת פרמטרים מה-URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionParam = urlParams.get('session');
+        const categoryParam = urlParams.get('category');
+
+        // טוען את כל הסשנים
+        loadAllSessions();
+
+        // אם יש פרמטרים, בחר אותם אחרי שהסשנים נטענו
+        if (categoryParam && sessionParam) {
+            setTimeout(() => {
+                selectCategory(categoryParam);
+                setTimeout(() => {
+                    selectedSession = sessionParam;
+                    // סמן את הטאב הנכון
+                    document.querySelectorAll('.prayer-tab').forEach(tab => {
+                        tab.classList.remove('active');
+                        if (tab.dataset.session === sessionParam) {
+                            tab.classList.add('active');
+                        }
+                    });
+                    loadWeeklyAttendance();
+                }, 100);
+            }, 200);
+        }
     });
 </script>
 
@@ -668,7 +744,7 @@
         // Load students for the selected day
         rapidFillingDate = dateStr;
 
-        fetch(`/api/rapid-filling/${dateStr}/${selectedPrayer}`)
+        fetch(`/api/rapid-filling/${dateStr}/${selectedSession}`)
             .then(response => response.json())
             .then(data => {
                 const dayData = weeklyData[dateStr] || {};
@@ -749,7 +825,8 @@
                 student_id: student.id,
                 date: rapidFillingDate,
                 status: status,
-                prayer_type: selectedPrayer
+                session_type: selectedSession,
+                category: selectedCategory
             })
         }).catch(error => console.error('Error saving:', error));
 

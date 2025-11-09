@@ -33,6 +33,12 @@ xlrd==2.0.1
 
 # Utilities
 python-dateutil==2.8.2
+pyluach==2.2.0
+
+# PDF Generation from HTML
+# Note: weasyprint requires GTK+ libraries on Windows
+# If PDF generation doesn't work, the system will fall back to HTML print
+weasyprint==60.1
 
 
 

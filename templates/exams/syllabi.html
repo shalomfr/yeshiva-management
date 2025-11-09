@@ -37,7 +37,7 @@
                             <option value="">בחר מקצוע</option>
                             <option value="עיון">עיון</option>
                             <option value="בקיאות">בקיאות</option>
-                            <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                            <option value="גמרא עם רש״י">גמרא עם רש״י</option>
                             <option value="חומש">חומש</option>
                             <option value="הלכה">הלכה</option>
                         </select>
@@ -67,7 +67,7 @@
 
             <!-- Dynamic Fields based on Subject -->
             <div id="dynamicFields" class="dynamic-fields" style="margin-top: 20px; display: none;">
-                <!-- For Gemara subjects (עיון, בקיאות, גמרא עם רש"י) -->
+                <!-- For Gemara subjects (עיון, בקיאות, גמרא עם רש״י) -->
                 <div id="gemaraFields" style="display: none;">
                     <div class="form-grid">
                         <div class="field">
@@ -175,7 +175,7 @@
                         <option value="">כל המקצועות</option>
                         <option value="עיון">עיון</option>
                         <option value="בקיאות">בקיאות</option>
-                        <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                        <option value="גמרא עם רש״י">גמרא עם רש״י</option>
                         <option value="חומש">חומש</option>
                         <option value="הלכה">הלכה</option>
                     </select>
@@ -235,7 +235,7 @@ function updateSyllabusFields() {
 
     dynamicFields.style.display = 'block';
 
-    if (subject === 'עיון' || subject === 'בקיאות' || subject === 'גמרא עם רש"י') {
+    if (subject === 'עיון' || subject === 'בקיאות' || subject === 'גמרא עם רש״י') {
         gemaraFields.style.display = 'block';
     } else if (subject === 'חומש') {
         chumashFields.style.display = 'block';
@@ -320,7 +320,7 @@ document.getElementById('syllabusForm').addEventListener('submit', function(e) {
     let content = {};
     let syllabusText = '';
 
-    if (subject === 'עיון' || subject === 'בקיאות' || subject === 'גמרא עם רש"י') {
+    if (subject === 'עיון' || subject === 'בקיאות' || subject === 'גמרא עם רש״י') {
         const masechet = document.getElementById('masechet').value;
         const fromPage = document.getElementById('fromPage').value;
         const toPage = document.getElementById('toPage').value;

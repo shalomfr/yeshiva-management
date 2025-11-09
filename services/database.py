@@ -4,6 +4,7 @@
 """
 
 import sqlite3
+from datetime import timedelta
 from datetime import datetime
 import os
 import sys
@@ -153,6 +154,16 @@ class YeshivaDatabase:
                 UNIQUE(student_id, date_gregorian, session_type)
             )
         ''')
+
+        # הוספת עמודה לשעת איחור אם לא קיימת
+        try:
+            cursor.execute("PRAGMA table_info(attendance)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'late_time' not in columns:
+                cursor.execute('ALTER TABLE attendance ADD COLUMN late_time TEXT')
+                print("נוספה עמודת late_time לטבלת attendance")
+        except Exception as e:
+            print(f"שגיאה בהוספת עמודת late_time: {e}")
 
         # Migration: טיפול בעמודות ישנות אם הטבלה כבר קיימת עם המבנה הישן
         try:
@@ -458,6 +469,10 @@ class YeshivaDatabase:
         conn.close()
         return dict(row) if row else None
 
+    def get_student_by_id(self, student_id):
+        """Alias for get_student - קבלת פרטי תלמיד"""
+        return self.get_student(student_id)
+
     def update_student(self, student_id, student_data):
         """עדכון פרטי תלמיד"""
         conn = sqlite3.connect(self.db_name)
@@ -535,6 +550,30 @@ class YeshivaDatabase:
         conn.commit()
         conn.close()
 
+    def save_late_time(self, student_id, date_hebrew, date_gregorian, late_time, session_type='שחרית', category='תפילה'):
+        """שמירת שעת איחור
+        
+        Args:
+            student_id: מזהה תלמיד
+            date_hebrew: תאריך עברי
+            date_gregorian: תאריך גרגוריאני
+            late_time: שעת האיחור (פורמט HH:MM)
+            session_type: שם הסשן
+            category: 'תפילה' או 'לימוד'
+        """
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # עדכון שעת האיחור בטבלה
+        cursor.execute('''
+            UPDATE attendance
+            SET late_time = ?
+            WHERE student_id = ? AND date_gregorian = ? AND session_type = ?
+        ''', (late_time, student_id, date_gregorian, session_type))
+        
+        conn.commit()
+        conn.close()
+
     def get_attendance(self, student_id, date_hebrew, session_type='שחרית'):
         """קבלת נוכחות לתאריך וסשן מסוים
 
@@ -604,7 +643,7 @@ class YeshivaDatabase:
         """קבלת רשימת נוכחות לתאריך וסשן מסוים (כל התלמידים)
 
         Returns:
-            List of tuples: [(student_id, date_hebrew, status), ...]
+            List of tuples: [(student_id, date_hebrew, status, late_time), ...]
         """
         from pyluach import dates
 
@@ -615,7 +654,7 @@ class YeshivaDatabase:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT student_id, date_hebrew, status
+            SELECT student_id, date_hebrew, status, late_time
             FROM attendance
             WHERE date_hebrew = ? AND session_type = ?
         ''', (date_hebrew, session_type))
@@ -623,6 +662,237 @@ class YeshivaDatabase:
         conn.close()
 
         return results
+
+    def get_student_exams(self, student_id):
+        """קבלת כל מבחני התלמיד עם ציונים
+        
+        Returns:
+            List of dicts with exam info
+        """
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # TODO: צריך לבנות טבלת ציונים אם לא קיימת
+        # לעת עתה נחזיר רשימה ריקה
+        try:
+            cursor.execute('''
+                SELECT exam_title, subject, grade, exam_date, notes
+                FROM exam_results
+                WHERE student_id = ?
+                ORDER BY exam_date DESC
+            ''', (student_id,))
+            
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    'subject': row[1],
+                    'grade': row[2],
+                    'date': row[3],
+                    'notes': row[4] or ''
+                })
+            conn.close()
+            return results
+        except:
+            # אם הטבלה לא קיימת עדיין
+            conn.close()
+            return []
+    
+    def get_student_attendance_summary(self, student_id, start_date, end_date, session_type='שחרית'):
+        """קבלת סיכום נוכחות לתלמיד בטווח תאריכים
+        
+        Returns:
+            Dict with present, absent, late counts and percentage
+        """
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        present = 0
+        absent = 0
+        late = 0
+        
+        current = start_date
+        while current <= end_date:
+            attendance_data = self.get_attendance_for_date(current, session_type)
+            for att in attendance_data:
+                if att[0] == student_id:
+                    if att[2] == 'נוכח':
+                        present += 1
+                    elif att[2] == 'חסר':
+                        absent += 1
+                    elif att[2] == 'איחור':
+                        late += 1
+                    break
+            current += timedelta(days=1)
+        
+        total_days = (end_date - start_date).days + 1
+        percent = int((present / total_days * 100)) if total_days > 0 else 0
+        
+        conn.close()
+        return {
+            'present': present,
+            'absent': absent,
+            'late': late,
+            'total_days': total_days,
+            'percent': percent
+        }
+
+    def get_student_exams(self, student_id):
+        """קבלת כל מבחני התלמיד עם ציונים - מקובץ לפי מקצוע"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        try:
+            # שליפת ציונים מהטבלאות האמיתיות
+            cursor.execute('''
+                SELECT 
+                    e.subject,
+                    eg.grade_percent,
+                    se.actual_date,
+                    e.title
+                FROM student_exams se
+                JOIN exams e ON se.exam_id = e.id
+                LEFT JOIN exam_grades eg ON se.id = eg.student_exam_id
+                WHERE se.student_id = ?
+                    AND eg.grade_percent IS NOT NULL
+                ORDER BY se.actual_date DESC
+            ''', (student_id,))
+            
+            results = cursor.fetchall()
+            conn.close()
+            
+            # ארגון לפי מקצוע - נקח את הציון האחרון לכל מקצוע
+            exams_by_subject = {}
+            for row in results:
+                subject, grade, date, title = row
+                
+                # נרמול שמות המקצועות
+                subject_normalized = subject
+                if 'עיון' in subject:
+                    subject_key = 'iyon'
+                elif 'בקיאות' in subject or 'בקיאות' in subject:
+                    subject_key = 'bekiut'
+                elif 'גמרא' in subject and 'רש' in subject:
+                    subject_key = 'gemara_rashi'
+                elif 'חומש' in subject:
+                    subject_key = 'chumash'
+                else:
+                    subject_key = subject
+                
+                # נשמור רק את הציון האחרון לכל מקצוע
+                if subject_key not in exams_by_subject:
+                    exams_by_subject[subject_key] = {
+                        'subject': subject,
+                        'grade': int(grade) if grade else '',
+                        'date': date,
+                        'title': title
+                    }
+            
+            return exams_by_subject
+            
+        except Exception as e:
+            print(f"Error getting student exams: {e}")
+            conn.close()
+            return {}
+
+    def get_student_attendance_summary(self, student_id, start_date, end_date, session_type='שחרית'):
+        """קבלת סיכום נוכחות בטווח תאריכים"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT status, COUNT(*) as count
+            FROM attendance
+            WHERE student_id = ? 
+                AND date_gregorian BETWEEN ? AND ?
+                AND session_type = ?
+            GROUP BY status
+        ''', (student_id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), session_type))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        summary = {'present': 0, 'absent': 0, 'late': 0}
+        for row in results:
+            status, count = row
+            if status == 'נוכח':
+                summary['present'] = count
+            elif status == 'חסר':
+                summary['absent'] = count
+            elif status == 'איחור':
+                summary['late'] = count
+        
+        total = summary['present'] + summary['absent'] + summary['late']
+        summary['total'] = total
+        summary['total_days'] = (end_date - start_date).days + 1
+        summary['total_weeks'] = summary['present']
+        summary['percentage'] = int((summary['present'] / total * 100)) if total > 0 else 0
+        
+        return summary
+
+    def get_student_attendance_weekly(self, student_id, start_date, end_date, session_type='שחרית'):
+        """קבלת נוכחות שבועית - כל יום בנפרד"""
+        from datetime import timedelta
+        
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # קבלת כל רשומות הנוכחות בטווח
+        cursor.execute('''
+            SELECT date_gregorian, status
+            FROM attendance
+            WHERE student_id = ? 
+                AND date_gregorian BETWEEN ? AND ?
+                AND session_type = ?
+            ORDER BY date_gregorian
+        ''', (student_id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), session_type))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        # ארגון לפי שבועות
+        attendance_dict = {}
+        for row in results:
+            date_str, status = row
+            attendance_dict[date_str] = status
+        
+        # יצירת רשימת שבועות
+        weeks = []
+        
+        # מציאת תחילת השבוע הראשון
+        day_of_week = start_date.weekday()
+        days_to_sunday = (day_of_week + 1) % 7
+        current_week_start = start_date - timedelta(days=days_to_sunday)
+        
+        # עבור על כל השבועות בטווח
+        while current_week_start <= end_date:
+            week_data = {'name': current_week_start.strftime('%d/%m')}
+            
+            for i in range(6):  # ראשון עד שישי (0-5)
+                day = current_week_start + timedelta(days=i)
+                
+                # רק אם היום בטווח התאריכים
+                if start_date <= day <= end_date:
+                    date_str = day.strftime('%Y-%m-%d')
+                    
+                    if date_str in attendance_dict:
+                        status = attendance_dict[date_str]
+                        if status == 'נוכח':
+                            week_data[f'day{i+1}'] = '1'
+                        elif status == 'חסר':
+                            week_data[f'day{i+1}'] = '0'
+                        elif status == 'איחור':
+                            week_data[f'day{i+1}'] = '½'
+                        else:
+                            week_data[f'day{i+1}'] = ''
+                    else:
+                        week_data[f'day{i+1}'] = ''
+                else:
+                    week_data[f'day{i+1}'] = '-----'  # מחוץ לטווח
+            
+            weeks.append(week_data)
+            current_week_start += timedelta(days=7)
+        
+        return weeks
 
     def get_all_sessions(self):
         """קבלת כל הסשנים (תפילות + סדרי לימוד)

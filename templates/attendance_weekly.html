@@ -239,7 +239,8 @@
             const dayData = weeklyData[dateStr] || {};
             const dayName = getHebrewDayName(date.getDay());
             const hebrewDate = dayData.hebrew_date || '';
-            headerRow.innerHTML += `<th class="day-col" title="${hebrewDate}">${dayName}<br><small>${hebrewDate}</small></th>`;
+            const escapedHebrewDate = hebrewDate.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            headerRow.innerHTML += `<th class="day-col" title="${escapedHebrewDate}">${dayName}<br><small>${hebrewDate}</small></th>`;
         });
 
         const firstDate = formatDate(weekDates[0]);

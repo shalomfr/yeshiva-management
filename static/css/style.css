@@ -19,8 +19,8 @@ body {
 /* App Container */
 .app-container {
     display: flex;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    height: auto;
 }
 
 /* Sidebar */
@@ -113,8 +113,10 @@ body {
 .content {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 30px;
     background-color: #E8F4F8;
+    height: auto;
 }
 
 /* Page Header */
@@ -203,6 +205,48 @@ body {
 
 .card-late .card-value {
     color: #FF9800;
+}
+
+/* Quick Access Grid */
+.quick-access-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 10px 0;
+}
+
+.quick-access-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 15px;
+    background: white;
+    border: 2px solid #E0E0E0;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-height: 100px;
+}
+
+.quick-access-btn:hover {
+    border-color: #5B8FDE;
+    background: #F8F9FF;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.quick-access-btn .qa-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.quick-access-btn .qa-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
 }
 
 .card-warning .card-border {
@@ -412,6 +456,15 @@ tbody tr:hover {
 
 .btn-icon:hover {
     opacity: 0.7;
+}
+
+.btn-icon.report {
+    color: #4A90E2;
+}
+
+.btn-icon.report:hover {
+    color: #3E7AD9;
+    transform: scale(1.1);
 }
 
 /* Modal */
@@ -1438,6 +1491,26 @@ tbody tr:hover {
     background-color: #FFE0B2;
     border-color: #E65100;
     transform: scale(1.05);
+}
+
+/* Late Time Input Field */
+.late-time-input {
+    width: 70px;
+    padding: 4px;
+    text-align: center;
+    border: 1px solid #FFA726;
+    border-radius: 4px;
+    background-color: white;
+    color: #E65100;
+    font-weight: bold;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.late-time-input:focus {
+    outline: none;
+    border-color: #E65100;
+    box-shadow: 0 0 5px rgba(230, 81, 0, 0.3);
 }
 
 .attendance-cell.loading {

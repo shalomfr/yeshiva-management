@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>דוח תלמיד - {{ student_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/print.css') }}">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            padding: 20px;
+            background: white;
+        }
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .yeshiva-info {
+            text-align: center;
+            flex: 1;
+        }
+        .yeshiva-name {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .report-title {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: #E8F4F8;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+        .student-details {
+            margin: 20px 0;
+            border: 1px solid #ccc;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        .student-details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .student-details td {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+        }
+        .student-details td:first-child {
+            font-weight: bold;
+            background: #e8e8e8;
+            width: 30%;
+        }
+        .intro-text {
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff9e6;
+            border-right: 4px solid #4A90E2;
+            line-height: 1.8;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 20px 0 10px 0;
+            padding: 8px;
+            background: #4A90E2;
+            color: white;
+            text-align: center;
+        }
+        .exams-table, .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            border: 2px solid #000;
+        }
+        .exams-table th, .exams-table td,
+        .attendance-table th, .attendance-table td {
+            border: 1px solid #000;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .exams-table th, .attendance-table th {
+            background: #f0f0f0;
+            font-weight: bold;
+            border: 1px solid #000;
+        }
+        .exams-table td:first-child,
+        .attendance-table td:first-child {
+            text-align: right;
+            font-weight: 600;
+            background: #fafafa;
+        }
+        .attendance-table th {
+            min-width: 40px;
+        }
+        .signature-section {
+            margin-top: 40px;
+            padding: 20px;
+            border: 1px dashed #999;
+        }
+        .signature-line {
+            margin-top: 60px;
+            border-top: 1px solid #333;
+            padding-top: 5px;
+            text-align: center;
+        }
+        @media print {
+            body { padding: 10px; }
+            .no-print { display: none; }
+            @page { margin: 1cm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="report-header">
+        <div class="logo">🕍</div>
+        <div class="yeshiva-info">
+            <div class="yeshiva-name">ישיבת {{ yeshiva_name|default('עמשינוב') }}</div>
+            <div class="report-title">דוח התקדמות תלמיד</div>
+            <div style="font-size: 12px; color: #666;">{{ current_date }}</div>
+        </div>
+        <div class="logo">📖</div>
+    </div>
+
+    <div class="student-details">
+        <table>
+            <tr>
+                <td>שם התלמיד</td>
+                <td>{{ student_name }}</td>
+            </tr>
+            <tr>
+                <td>שיעור</td>
+                <td>{{ student_grade }}</td>
+            </tr>
+            <tr>
+                <td>תאריך לידה</td>
+                <td>{{ student_birth_date }}</td>
+            </tr>
+            <tr>
+                <td>כתובת</td>
+                <td>{{ student_address }}</td>
+            </tr>
+            {% if student_city %}
+            <tr>
+                <td>עיר</td>
+                <td>{{ student_city }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td>טלפון</td>
+                <td>{{ student_phone }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if intro_text %}
+    <div class="intro-text">
+        {{ intro_text|safe }}
+    </div>
+    {% endif %}
+
+    <div class="section-title">טבלת ציוני המבחנים</div>
+    <table class="exams-table">
+        <thead>
+            <tr>
+                <th></th>
+                <th>עיון</th>
+                <th>בקיאות</th>
+                <th>גמרא רשי</th>
+                <th>חומש</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student_row in exam_students %}
+            <tr>
+                <td>{{ student_row.name }}</td>
+                <td>{{ student_row.iyon|default('') }}</td>
+                <td>{{ student_row.bekiut|default('') }}</td>
+                <td>{{ student_row.gemara_rashi|default('') }}</td>
+                <td>{{ student_row.chumash|default('') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="section-title">נוכחות שיעור גמרא רשי</div>
+    <table class="attendance-table">
+        <thead>
+            <tr>
+                <th></th>
+                <th>אי</th>
+                <th>בי</th>
+                <th>גי</th>
+                <th>די</th>
+                <th>הי</th>
+                <th>ו׳</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student_att in attendance_weekly %}
+            <tr>
+                <td>{{ student_att.name }}</td>
+                <td>{{ student_att.day1|default('') }}</td>
+                <td>{{ student_att.day2|default('') }}</td>
+                <td>{{ student_att.day3|default('') }}</td>
+                <td>{{ student_att.day4|default('') }}</td>
+                <td>{{ student_att.day5|default('') }}</td>
+                <td>{{ student_att.day6|default('') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div style="margin: 15px 0; text-align: right; font-size: 13px; line-height: 1.8;">
+        <strong>הסבר:</strong> 1=נוכח, 0=חיסור, ריק=לא סומן<br>
+        {% if attendance_summary %}
+        <strong>סה״כ:</strong> {{ attendance_summary.total_weeks }} ימי נוכחות מתוך {{ attendance_summary.total_days }} ימים, איחורים {{ attendance_summary.late }}
+        {% endif %}
+    </div>
+
+    <div class="signature-section">
+        <p style="margin-bottom: 10px;">אני מאשר שקיבלתי את הדוח ועיינתי בו:</p>
+        <div class="signature-line">חתימת ההורים</div>
+        <div style="margin-top: 20px; font-size: 12px; color: #666;">
+            תאריך: ___________________
+        </div>
+    </div>
+
+    <div class="no-print" style="text-align: center; margin-top: 30px;">
+        <button onclick="window.print()" style="padding: 10px 30px; background: #4A90E2; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+            🖨️ הדפס
+        </button>
+        <button onclick="window.close()" style="padding: 10px 30px; background: #999; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-right: 10px;">
+            סגור
+        </button>
+    </div>
+</body>
+</html>

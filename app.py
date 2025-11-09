@@ -4,7 +4,7 @@ Flask Application - Yeshiva Management System
 מערכת Flask - מערכת ניהול ישיבה
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, make_response
 from datetime import datetime, timedelta
 from pyluach import dates
 from services.database import YeshivaDatabase, ExamDatabase
@@ -171,15 +171,18 @@ def api_get_attendance(date, session='שחרית'):
             grade = student[15] if len(student) > 15 else 'א'  # current_grade is at index 15
 
             status = None
+            late_time = None
             for att in attendance_data:
                 if att[0] == student_id:
                     status = att[2]
+                    late_time = att[3] if len(att) > 3 else None
                     break
 
             result['students'].append({
                 'id': student_id,
                 'name': f"{first_name} {last_name}",
                 'status': status,
+                'late_time': late_time,
                 'grade': grade
             })
 
@@ -229,6 +232,30 @@ def api_mark_attendance():
 
         db.save_attendance(student_id, heb_date, date, status, session_type, category)
 
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/attendance/late-time', methods=['POST'])
+def api_save_late_time():
+    """API: שמירת שעת איחור"""
+    try:
+        data = request.json
+        student_id = data.get('student_id')
+        date = data.get('date')
+        late_time = data.get('late_time')
+        session_type = data.get('session_type', 'שחרית')
+        category = data.get('category', 'תפילה')
+        
+        gregorian_date = datetime.strptime(date, '%Y-%m-%d').date()
+        
+        # Convert to Hebrew date
+        from services.date_service import HebrewDateConverter
+        heb_date = HebrewDateConverter.get_hebrew_date(gregorian_date)
+        
+        # שמירת שעת האיחור בבסיס הנתונים
+        db.save_late_time(student_id, heb_date, date, late_time, session_type, category)
+        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -308,10 +335,10 @@ def api_export_csv():
         rows = [['שם מלא', 'שיעור', 'תעודת זהות', 'נוכחויות', 'העדרויות', 'אחוז']]
 
         for student in students:
-            student_id, first_name, last_name, id_number, birth_date, address, \
-                father_name, mother_name, father_phone, mother_phone, home_phone, \
-                entry_date, current_grade, initial_grade, status, framework_type, \
-                notes, created_at, last_grade_update = student
+            student_id, first_name, last_name, id_number, birth_date, address, city, \
+                father_name, father_id_number, mother_name, mother_id_number, \
+                father_phone, mother_phone, home_phone, entry_date, current_grade, \
+                initial_grade, status, framework_type, notes, created_at, last_grade_update = student
 
             full_name = f"{first_name} {last_name}"
             grade = current_grade if current_grade else "-"
@@ -321,16 +348,19 @@ def api_export_csv():
 
             present = 0
             absent = 0
+            late = 0
 
             current = start_date
             while current <= end_date:
-                attendance_data = db.get_attendance_for_date(current)
+                attendance_data = db.get_attendance_for_date(current, 'שחרית')
                 for att in attendance_data:
                     if att[0] == student_id:
                         if att[2] == 'נוכח':
                             present += 1
                         elif att[2] == 'חסר':
                             absent += 1
+                        elif att[2] == 'איחור':
+                            late += 1
                         break
                 current += timedelta(days=1)
 
@@ -371,26 +401,29 @@ def api_reports_attendance():
 
         results = []
         for student in students:
-            student_id, first_name, last_name, id_number, birth_date, address, \
-                father_name, mother_name, father_phone, mother_phone, home_phone, \
-                entry_date, current_grade, initial_grade, status, framework_type, \
-                notes, created_at, last_grade_update = student
+            student_id, first_name, last_name, id_number, birth_date, address, city, \
+                father_name, father_id_number, mother_name, mother_id_number, \
+                father_phone, mother_phone, home_phone, entry_date, current_grade, \
+                initial_grade, status, framework_type, notes, created_at, last_grade_update = student
 
             if grade_filter != 'הכל' and current_grade != grade_filter:
                 continue
 
             present = 0
             absent = 0
+            late = 0
 
             current = start_date
             while current <= end_date:
-                attendance_data = db.get_attendance_for_date(current)
+                attendance_data = db.get_attendance_for_date(current, 'שחרית')
                 for att in attendance_data:
                     if att[0] == student_id:
                         if att[2] == 'נוכח':
                             present += 1
                         elif att[2] == 'חסר':
                             absent += 1
+                        elif att[2] == 'איחור':
+                            late += 1
                         break
                 current += timedelta(days=1)
 
@@ -422,6 +455,243 @@ def api_date_hebrew():
         from services.date_service import HebrewDateConverter
         heb = HebrewDateConverter.get_hebrew_date(pydate)
         return jsonify({'hebrew': heb})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/date/gregorian')
+def api_date_gregorian():
+    """API: המרת תאריך עברי ללועזי (DD/MM/YYYY)"""
+    try:
+        hebrew_date_str = request.args.get('hebrew_date')
+        if not hebrew_date_str:
+            return jsonify({'error': 'חסר פרמטר hebrew_date'}), 400
+        
+        from pyluach import dates
+        from services.date_service import HebrewDateConverter
+        
+        # ניסיון להמיר תאריך עברי ללועזי
+        # נבדוק כמה פורמטים אפשריים
+        try:
+            # פורמט: "א׳ בשבט תשפ״ה"
+            pydate = HebrewDateConverter.parse_hebrew_date(hebrew_date_str)
+            if pydate:
+                formatted = f"{pydate.day:02d}/{pydate.month:02d}/{pydate.year}"
+                return jsonify({'gregorian': formatted})
+        except:
+            pass
+            
+        return jsonify({'error': 'לא ניתן להמיר תאריך זה'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/student-report')
+@app.route('/student-report/<int:student_id>')
+def student_report_page(student_id=None):
+    """עמוד הפקת דוח פרטי לתלמיד"""
+    return render_template('student_report.html', student_id=student_id)
+
+@app.route('/api/student-report-data/<int:student_id>')
+def api_student_report_data(student_id):
+    """API: קבלת כל נתוני התלמיד לדוח"""
+    try:
+        student = db.get_student_by_id(student_id)
+        if not student:
+            return jsonify({'error': 'תלמיד לא נמצא'}), 404
+        
+        # Get student exams - מחזיר dictionary לפי מקצוע
+        exams_dict = db.get_student_exams(student_id)
+        
+        return jsonify({
+            'id': student['id'],
+            'name': f"{student['first_name']} {student['last_name']}",
+            'grade': student.get('current_grade', ''),
+            'birth_date': student.get('birth_date_hebrew', ''),
+            'address': student.get('address', ''),
+            'city': student.get('city', ''),
+            'phone': student.get('home_phone', ''),
+            'exams': exams_dict
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/student-report/preview', methods=['POST'])
+def api_student_report_preview():
+    """API: יצירת תצוגה מקדימה של הדוח"""
+    try:
+        data = request.json
+        student_id = data.get('student_id')
+        intro_text = data.get('intro_text', '')
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+        exams = data.get('exams', [])
+        
+        student = db.get_student_by_id(student_id)
+        if not student:
+            return jsonify({'error': 'תלמיד לא נמצא'}), 404
+        
+        # Parse dates
+        start_date = datetime.strptime(start_date_str, '%d/%m/%Y').date()
+        end_date = datetime.strptime(end_date_str, '%d/%m/%Y').date()
+        
+        # Get attendance summary and weekly data
+        attendance_summary = db.get_student_attendance_summary(student_id, start_date, end_date)
+        attendance_weekly = db.get_student_attendance_weekly(student_id, start_date, end_date)
+        
+        # Format exam data for horizontal table
+        exam_students = [{
+            'name': f"{student['first_name']} {student['last_name']}",
+            'iyon': exams.get('iyon', ''),
+            'bekiut': exams.get('bekiut', ''),
+            'gemara_rashi': exams.get('gemara_rashi', ''),
+            'chumash': exams.get('chumash', '')
+        }]
+        
+        # Get Hebrew dates
+        from services.date_service import HebrewDateConverter
+        start_heb = HebrewDateConverter.get_hebrew_date(start_date)
+        end_heb = HebrewDateConverter.get_hebrew_date(end_date)
+        
+        # Render the print template
+        html = render_template('student_report_print.html',
+            student_name=f"{student['first_name']} {student['last_name']}",
+            student_grade=student.get('current_grade', ''),
+            student_birth_date=student.get('birth_date_hebrew', ''),
+            student_address=student.get('address', ''),
+            student_city=student.get('city', ''),
+            student_phone=student.get('home_phone', ''),
+            intro_text=intro_text,
+            exam_students=exam_students,
+            attendance_summary=attendance_summary,
+            attendance_weekly=attendance_weekly,
+            date_range_start=start_heb,
+            date_range_end=end_heb,
+            current_date=HebrewDateConverter.get_current_hebrew_date(),
+            yeshiva_name='עמשינוב'
+        )
+        
+        return html
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/student-report/print', methods=['POST'])
+def student_report_print():
+    """פתיחת דוח להדפסה בחלון חדש"""
+    try:
+        report_data = json.loads(request.form.get('report_data'))
+        
+        student_id = report_data.get('student_id')
+        intro_text = report_data.get('intro_text', '')
+        start_date_str = report_data.get('start_date')
+        end_date_str = report_data.get('end_date')
+        exams = report_data.get('exams', [])
+        
+        student = db.get_student_by_id(student_id)
+        if not student:
+            return "תלמיד לא נמצא", 404
+        
+        start_date = datetime.strptime(start_date_str, '%d/%m/%Y').date()
+        end_date = datetime.strptime(end_date_str, '%d/%m/%Y').date()
+        
+        attendance_summary = db.get_student_attendance_summary(student_id, start_date, end_date)
+        attendance_weekly = db.get_student_attendance_weekly(student_id, start_date, end_date)
+        
+        # Format exam data for horizontal table
+        exam_students = [{
+            'name': f"{student['first_name']} {student['last_name']}",
+            'iyon': exams.get('iyon', ''),
+            'bekiut': exams.get('bekiut', ''),
+            'gemara_rashi': exams.get('gemara_rashi', ''),
+            'chumash': exams.get('chumash', '')
+        }]
+        
+        from services.date_service import HebrewDateConverter
+        start_heb = HebrewDateConverter.get_hebrew_date(start_date)
+        end_heb = HebrewDateConverter.get_hebrew_date(end_date)
+        
+        return render_template('student_report_print.html',
+            student_name=f"{student['first_name']} {student['last_name']}",
+            student_grade=student.get('current_grade', ''),
+            student_birth_date=student.get('birth_date_hebrew', ''),
+            student_address=student.get('address', ''),
+            student_city=student.get('city', ''),
+            student_phone=student.get('home_phone', ''),
+            intro_text=intro_text,
+            exam_students=exam_students,
+            attendance_summary=attendance_summary,
+            attendance_weekly=attendance_weekly,
+            date_range_start=start_heb,
+            date_range_end=end_heb,
+            current_date=HebrewDateConverter.get_current_hebrew_date(),
+            yeshiva_name='עמשינוב'
+        )
+    except Exception as e:
+        return f"שגיאה: {str(e)}", 400
+
+@app.route('/api/student-report/pdf', methods=['POST'])
+def api_student_report_pdf():
+    """API: יצירת PDF של דוח התלמיד"""
+    try:
+        data = request.json
+        student_id = data.get('student_id')
+        intro_text = data.get('intro_text', '')
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+        exams = data.get('exams', [])
+        
+        student = db.get_student_by_id(student_id)
+        if not student:
+            return jsonify({'error': 'תלמיד לא נמצא'}), 404
+        
+        start_date = datetime.strptime(start_date_str, '%d/%m/%Y').date()
+        end_date = datetime.strptime(end_date_str, '%d/%m/%Y').date()
+        
+        attendance_summary = db.get_student_attendance_summary(student_id, start_date, end_date)
+        attendance_weekly = db.get_student_attendance_weekly(student_id, start_date, end_date)
+        
+        # Format exam data for horizontal table
+        exam_students = [{
+            'name': f"{student['first_name']} {student['last_name']}",
+            'iyon': exams.get('iyon', ''),
+            'bekiut': exams.get('bekiut', ''),
+            'gemara_rashi': exams.get('gemara_rashi', ''),
+            'chumash': exams.get('chumash', '')
+        }]
+        
+        from services.date_service import HebrewDateConverter
+        start_heb = HebrewDateConverter.get_hebrew_date(start_date)
+        end_heb = HebrewDateConverter.get_hebrew_date(end_date)
+        
+        html = render_template('student_report_print.html',
+            student_name=f"{student['first_name']} {student['last_name']}",
+            student_grade=student.get('current_grade', ''),
+            student_birth_date=student.get('birth_date_hebrew', ''),
+            student_address=student.get('address', ''),
+            student_city=student.get('city', ''),
+            student_phone=student.get('home_phone', ''),
+            intro_text=intro_text,
+            exam_students=exam_students,
+            attendance_summary=attendance_summary,
+            attendance_weekly=attendance_weekly,
+            date_range_start=start_heb,
+            date_range_end=end_heb,
+            current_date=HebrewDateConverter.get_current_hebrew_date(),
+            yeshiva_name='עמשינוב'
+        )
+        
+        # Try to create PDF using weasyprint
+        try:
+            from weasyprint import HTML
+            pdf = HTML(string=html).write_pdf()
+            
+            response = make_response(pdf)
+            response.headers['Content-Type'] = 'application/pdf'
+            response.headers['Content-Disposition'] = f'attachment; filename=student_report_{student_id}.pdf'
+            return response
+        except ImportError:
+            # If weasyprint not available, return HTML that can be printed
+            response = make_response(html)
+            response.headers['Content-Type'] = 'text/html; charset=utf-8'
+            return response
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

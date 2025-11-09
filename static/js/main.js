@@ -30,6 +30,19 @@ function formatDate(date) {
     return `${year}-${month}-${day}`;
 }
 
+// Escape HTML to prevent XSS and quote issues
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
 function formatHebrewDate(hebrewDateString) {
     // hebrewDateString format: "1 שבט תשפ"ה"
     return hebrewDateString;
@@ -98,3 +111,4 @@ window.showError = showError;
 window.showSuccess = showSuccess;
 window.confirmAction = confirmAction;
 window.formatDate = formatDate;
+window.escapeHtml = escapeHtml;

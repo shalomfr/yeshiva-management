@@ -33,9 +33,9 @@
             <div class="filter-section grade-section">
                 <label class="filter-label">שיעור:</label>
                 <div class="grade-toggle-buttons">
-                    <button class="grade-btn active" data-grade="א'" onclick="toggleGradeFilter('א')">א'</button>
-                    <button class="grade-btn active" data-grade="ב'" onclick="toggleGradeFilter('ב')">ב'</button>
-                    <button class="grade-btn active" data-grade="ג'" onclick="toggleGradeFilter('ג')">ג'</button>
+                    <button class="grade-btn active" data-grade="א'" onclick="toggleGradeFilter(&quot;א'&quot;)">א'</button>
+                    <button class="grade-btn active" data-grade="ב'" onclick="toggleGradeFilter(&quot;ב'&quot;)">ב'</button>
+                    <button class="grade-btn active" data-grade="ג'" onclick="toggleGradeFilter(&quot;ג'&quot;)">ג'</button>
                 </div>
             </div>
 
@@ -48,7 +48,7 @@
                     </button>
                     <div class="dropdown-content" id="cityDropdown" style="display: none;">
                         <label class="checkbox-label">
-                            <input type="checkbox" value="all" checked onchange="toggleAllCities()"> הכל
+                            <input type="checkbox" value="all" id="allCitiesCheckbox" checked> הכל
                         </label>
                         <div id="cityCheckboxes"></div>
                     </div>
@@ -87,7 +87,7 @@
                         <th onclick="handleSort('home_phone')" data-column="home_phone">טלפון בית <span class="sort-indicator"></span></th>
                         <th onclick="handleSort('mobile_phone')" data-column="mobile_phone">פלאפון <span class="sort-indicator"></span></th>
                         <th onclick="handleSort('status')" data-column="status">סטטוס <span class="sort-indicator"></span></th>
-                        <th>פעולות</th>
+                        <th style="min-width: 120px;">פעולות</th>
                     </tr>
                 </thead>
                 <tbody id="studentsList">
@@ -233,9 +233,16 @@
 
         cityCheckboxes.innerHTML = cities.map(city => `
             <label class="checkbox-label">
-                <input type="checkbox" value="${city}" checked onchange="toggleCityFilter('${city}')"> ${city}
+                <input type="checkbox" value="${city}" checked data-city="${city}"> ${city}
             </label>
         `).join('');
+        
+        // Add event listeners to checkboxes
+        cityCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                toggleCityFilter(this.dataset.city);
+            });
+        });
 
         activeFilters.cities = cities;  // כל הערים פעילות בברירת מחדל
     }
@@ -376,8 +383,9 @@
                 <td>${student.mobile_phone || '-'}</td>
                 <td><span class="status-badge ${student.status === 'פעיל' ? 'active' : 'inactive'}">${student.status}</span></td>
                 <td class="action-buttons">
-                    <button class="btn-icon edit" onclick="editStudent(${student.id})">✏️</button>
-                    <button class="btn-icon delete" onclick="deleteStudent(${student.id})">🗑️</button>
+                    <button class="btn-icon report" onclick="openStudentReport(${student.id})" title="דוח פרטי">📄</button>
+                    <button class="btn-icon edit" onclick="editStudent(${student.id})" title="ערוך">✏️</button>
+                    <button class="btn-icon delete" onclick="deleteStudent(${student.id})" title="מחק">🗑️</button>
                 </td>
             </tr>
         `).join('');
@@ -387,7 +395,7 @@
 
     // סינון שיעור - Toggle
     function toggleGradeFilter(grade) {
-        const gradeWithQuote = grade + '\'';
+        const gradeWithQuote = grade;
         const btn = document.querySelector(`.grade-btn[data-grade="${gradeWithQuote}"]`);
 
         if (activeFilters.grades.includes(gradeWithQuote)) {
@@ -410,7 +418,7 @@
     }
 
     // Toggle כל הערים
-    function toggleAllCities() {
+    function toggleAllCities(event) {
         const allCheckbox = event.target;
         const cityCheckboxes = document.querySelectorAll('#cityCheckboxes input[type="checkbox"]');
 
@@ -593,7 +601,19 @@
         loadStudents();
     }
 
+    function openStudentReport(studentId) {
+        window.location.href = `/student-report?student_id=${studentId}`;
+    }
+
     // Load on page load
+    // Add event listener for "all cities" checkbox
+    document.addEventListener('DOMContentLoaded', function() {
+        const allCitiesCheckbox = document.getElementById('allCitiesCheckbox');
+        if (allCitiesCheckbox) {
+            allCitiesCheckbox.addEventListener('change', toggleAllCities);
+        }
+    });
+
     window.addEventListener('load', loadStudents);
 </script>
 {% endblock %}

@@ -1,0 +1,59 @@
+/* Print Styles for Student Reports */
+
+@media print {
+    * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    body {
+        margin: 0;
+        padding: 15px;
+        background: white !important;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    /* Page setup */
+    @page {
+        size: A4;
+        margin: 1.5cm;
+    }
+
+    /* Avoid page breaks inside elements */
+    .student-details,
+    .intro-text,
+    .exams-table,
+    .attendance-table,
+    .signature-section {
+        page-break-inside: avoid;
+    }
+
+    /* Headers on each page */
+    thead {
+        display: table-header-group;
+    }
+
+    /* Ensure tables don't break */
+    table {
+        page-break-inside: avoid;
+    }
+
+    /* Keep signature on last page */
+    .signature-section {
+        page-break-before: avoid;
+        margin-top: 30px;
+    }
+}
+
+/* General print-friendly styles */
+.print-preview {
+    max-width: 21cm;
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    padding: 20px;
+}
+

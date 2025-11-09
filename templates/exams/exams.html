@@ -80,7 +80,7 @@
                         <option value="">הכל</option>
                         <option value="עיון">עיון</option>
                         <option value="בקיאות">בקיאות</option>
-                        <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                        <option value="גמרא עם רש״י">גמרא עם רש״י</option>
                         <option value="חומש">חומש</option>
                         <option value="הלכה">הלכה</option>
                     </select>
@@ -290,7 +290,8 @@ function renderCalendarView(exams) {
         if (dayExams.length > 0) {
             html += '<div class="day-exams">';
             dayExams.forEach(exam => {
-                html += `<div class="exam-badge" onclick="viewExamDetails(${exam.id})" title="${exam.title}">${exam.subject}</div>`;
+                const escapedTitle = (exam.title || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                html += `<div class="exam-badge" onclick="viewExamDetails(${exam.id})" title="${escapedTitle}">${exam.subject}</div>`;
             });
             html += '</div>';
         }

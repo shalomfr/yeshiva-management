@@ -102,6 +102,64 @@
         </div>
     </div>
 
+    <!-- Quick Access to Study Sessions -->
+    <div class="content-card">
+        <h2 class="card-title">גישה מהירה - סדרי לימוד ותפילות</h2>
+        <div class="quick-access-grid">
+            <!-- תפילות -->
+            <a href="#" class="quick-access-btn" data-session-id="1" data-category="תפילה">
+                <span class="qa-icon">🌅</span>
+                <span class="qa-label">שחרית</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="2" data-category="תפילה">
+                <span class="qa-icon">☀️</span>
+                <span class="qa-label">מנחה</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="3" data-category="תפילה">
+                <span class="qa-icon">🌙</span>
+                <span class="qa-label">מעריב</span>
+            </a>
+
+            <!-- סדרי לימוד -->
+            <a href="#" class="quick-access-btn" data-session-id="4" data-category="לימוד">
+                <span class="qa-icon">📖</span>
+                <span class="qa-label">שיעור בקיאות</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="5" data-category="לימוד">
+                <span class="qa-icon">📝</span>
+                <span class="qa-label">סדר א - חזרה עיון</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="6" data-category="לימוד">
+                <span class="qa-icon">📚</span>
+                <span class="qa-label">שיעור עיון</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="7" data-category="לימוד">
+                <span class="qa-icon">📘</span>
+                <span class="qa-label">שיעור עיון 2</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="8" data-category="לימוד">
+                <span class="qa-icon">📜</span>
+                <span class="qa-label">שיעור גמרא רשי</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="9" data-category="לימוד">
+                <span class="qa-icon">📕</span>
+                <span class="qa-label">שיעור חומש רשי</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="10" data-category="לימוד">
+                <span class="qa-icon">⚖️</span>
+                <span class="qa-label">הלכה</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="11" data-category="לימוד">
+                <span class="qa-icon">🔄</span>
+                <span class="qa-label">סדר ב - חזרה בקיאות</span>
+            </a>
+            <a href="#" class="quick-access-btn" data-session-id="12" data-category="לימוד">
+                <span class="qa-icon">📋</span>
+                <span class="qa-label">סדר ג - הכנה עיון</span>
+            </a>
+        </div>
+    </div>
+
     <!-- Activities Section -->
     <div class="content-card">
         <h2 class="card-title">פעילויות אחרונות</h2>
@@ -110,4 +168,44 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Session ID to name mapping - matches database IDs
+    const sessionMap = {
+        1: 'שחרית',
+        2: 'מנחה',
+        3: 'מעריב',
+        4: 'שיעור בקיאות',
+        5: 'סדר א - חזרה עיון',
+        6: 'שיעור עיון',
+        7: 'שיעור עיון 2',
+        8: 'שיעור גמרא רשי',
+        9: 'שיעור חומש רשי',
+        10: 'הלכה',
+        11: 'סדר ב - חזרה בקיאות',
+        12: 'סדר ג - הכנה עיון'
+    };
+
+    // Add click handlers to all quick access buttons
+    document.addEventListener('DOMContentLoaded', function() {
+        const buttons = document.querySelectorAll('.quick-access-btn');
+        buttons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const sessionId = parseInt(this.getAttribute('data-session-id'));
+                const category = this.getAttribute('data-category');
+                const sessionName = sessionMap[sessionId];
+
+                if (sessionName) {
+                    const url = '/attendance?session=' + encodeURIComponent(sessionName) + '&category=' + encodeURIComponent(category);
+                    window.location.href = url;
+                } else {
+                    console.error('Session not found for ID:', sessionId);
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}

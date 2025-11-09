@@ -21,6 +21,7 @@
             </div>
         </div>
         <div class="toolbar-right">
+            <button onclick="window.location.href='/student-report'" style="background: #4A90E2; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">📋 דוח תלמיד פרטי</button>
             <button class="ghost" onclick="toggleScheduled()">דוחות מתוזמנים ▾</button>
             <button class="ghost" onclick="exportVisibleExcel()">ייצוא כפי שמוצג</button>
             <button class="primary" onclick="exportToCSV()">ייצוא דוח</button>
@@ -30,20 +31,23 @@
     <div class="filters-card">
         <div class="filters-row">
             <div class="field">
-                <label>מתאריך (תאריך עברי יוצג מתחת)</label>
+                <label>
+                    <span id="dateTypeLabel">מתאריך (עברי)</span>
+                    <button onclick="toggleDateMode()" style="background: none; border: none; color: #4A90E2; cursor: pointer; font-size: 12px; margin-right: 10px;">🔄 החלף ללועזי</button>
+                </label>
                 <div class="input with-icon">
                     <span class="icon">📅</span>
-                    <input type="text" id="startDate" placeholder="DD/MM/YYYY" value="01/01/2025" oninput="updateHebrewDates()">
+                    <input type="text" id="startDate" placeholder='א׳ בשבט תשפ"ה' value="" oninput="handleDateInput('start')">
                 </div>
-                <small id="startHeb" class="muted"></small>
+                <small id="startConverted" class="muted"></small>
             </div>
             <div class="field">
-                <label>עד תאריך (תאריך עברי יוצג מתחת)</label>
+                <label>עד תאריך</label>
                 <div class="input with-icon">
                     <span class="icon">📅</span>
-                    <input type="text" id="endDate" placeholder="DD/MM/YYYY" value="" oninput="updateHebrewDates()">
+                    <input type="text" id="endDate" placeholder='א׳ בשבט תשפ"ה' value="" oninput="handleDateInput('end')">
                 </div>
-                <small id="endHeb" class="muted"></small>
+                <small id="endConverted" class="muted"></small>
             </div>
             <div class="field">
                 <label>סינון לפי שיעור</label>
@@ -98,28 +102,114 @@
 </div>
 
 <script>
+    // State management
+    let isHebrewMode = true; // כברירת מחדל - תאריכים עבריים
+    let startDateGregorian = '';
+    let endDateGregorian = '';
+
     // Set today's date as default
     window.addEventListener('load', function() {
+        initializeDates();
+    });
+
+    function initializeDates() {
         const today = new Date();
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const day = String(today.getDate()).padStart(2, '0');
-        document.getElementById('endDate').value = `${day}/${month}/${year}`;
-        updateHebrewDates();
-    });
+        const gregorianDate = `${day}/${month}/${year}`;
+        
+        endDateGregorian = gregorianDate;
+        
+        // חישוב תאריך התחלה - לפני 30 יום
+        const startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 30);
+        const startYear = startDate.getFullYear();
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+        const startDay = String(startDate.getDate()).padStart(2, '0');
+        startDateGregorian = `${startDay}/${startMonth}/${startYear}`;
+        
+        // המרה לעברי
+        convertToHebrew(startDateGregorian, 'start');
+        convertToHebrew(gregorianDate, 'end');
+    }
+
+    function toggleDateMode() {
+        isHebrewMode = !isHebrewMode;
+        const toggleBtn = document.querySelector('button[onclick="toggleDateMode()"]');
+        const label = document.getElementById('dateTypeLabel');
+        
+        if (isHebrewMode) {
+            toggleBtn.textContent = '🔄 החלף ללועזי';
+            label.textContent = 'מתאריך (עברי)';
+            document.getElementById('startDate').placeholder = 'א׳ בשבט תשפ"ה';
+            document.getElementById('endDate').placeholder = 'א׳ בשבט תשפ"ה';
+            // המרה חזרה לעברי
+            if (startDateGregorian) convertToHebrew(startDateGregorian, 'start');
+            if (endDateGregorian) convertToHebrew(endDateGregorian, 'end');
+        } else {
+            toggleBtn.textContent = '🔄 החלף לעברי';
+            label.textContent = 'מתאריך (לועזי)';
+            document.getElementById('startDate').placeholder = 'DD/MM/YYYY';
+            document.getElementById('endDate').placeholder = 'DD/MM/YYYY';
+            // הצגת התאריכים הלועזיים
+            document.getElementById('startDate').value = startDateGregorian;
+            document.getElementById('endDate').value = endDateGregorian;
+            document.getElementById('startConverted').textContent = '';
+            document.getElementById('endConverted').textContent = '';
+        }
+    }
+
+    function convertToHebrew(gregorianDate, field) {
+        fetch(`/api/date/hebrew?date=${encodeURIComponent(gregorianDate)}`)
+            .then(r => r.json())
+            .then(d => {
+                if (d.hebrew) {
+                    document.getElementById(field + 'Date').value = d.hebrew;
+                    document.getElementById(field + 'Converted').textContent = `(לועזי: ${gregorianDate})`;
+                }
+            })
+            .catch(err => console.error('Error converting date:', err));
+    }
+
+    function handleDateInput(field) {
+        const value = document.getElementById(field + 'Date').value;
+        if (!value) return;
+        
+        if (isHebrewMode) {
+            // המרה מעברי ללועזי
+            fetch(`/api/date/gregorian?hebrew_date=${encodeURIComponent(value)}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.gregorian) {
+                        if (field === 'start') {
+                            startDateGregorian = d.gregorian;
+                        } else {
+                            endDateGregorian = d.gregorian;
+                        }
+                        document.getElementById(field + 'Converted').textContent = `(לועזי: ${d.gregorian})`;
+                    }
+                })
+                .catch(err => console.error('Error converting date:', err));
+        } else {
+            // שמירת התאריך הלועזי
+            if (field === 'start') {
+                startDateGregorian = value;
+            } else {
+                endDateGregorian = value;
+            }
+        }
+    }
 
     function generateReport(reportType) {
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-
-        if (!startDate || !endDate) {
+        if (!startDateGregorian || !endDateGregorian) {
             alert('בחר טווח תאריכים');
             return;
         }
 
         const grade = document.getElementById('reportGrade').value;
 
-        fetch(`/api/reports/attendance?start_date=${startDate}&end_date=${endDate}&grade=${encodeURIComponent(grade)}`)
+        fetch(`/api/reports/attendance?start_date=${encodeURIComponent(startDateGregorian)}&end_date=${encodeURIComponent(endDateGregorian)}&grade=${encodeURIComponent(grade)}`)
             .then(r => r.json())
             .then(data => {
                 if (data.error) {
@@ -171,16 +261,14 @@
     }
 
     function exportToCSV() {
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-        const grade = document.getElementById('reportGrade').value;
-
-        if (!startDate || !endDate) {
+        if (!startDateGregorian || !endDateGregorian) {
             alert('בחר טווח תאריכים');
             return;
         }
 
-        fetch(`/api/export/csv?start_date=${startDate}&end_date=${endDate}&grade=${encodeURIComponent(grade)}`)
+        const grade = document.getElementById('reportGrade').value;
+
+        fetch(`/api/export/csv?start_date=${encodeURIComponent(startDateGregorian)}&end_date=${encodeURIComponent(endDateGregorian)}&grade=${encodeURIComponent(grade)}`)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
@@ -240,8 +328,16 @@
             start.setDate(start.getDate() - 30);
         }
 
-        document.getElementById('startDate').value = fmt(start);
-        document.getElementById('endDate').value = fmt(today);
+        startDateGregorian = fmt(start);
+        endDateGregorian = fmt(today);
+        
+        if (isHebrewMode) {
+            convertToHebrew(startDateGregorian, 'start');
+            convertToHebrew(endDateGregorian, 'end');
+        } else {
+            document.getElementById('startDate').value = startDateGregorian;
+            document.getElementById('endDate').value = endDateGregorian;
+        }
     }
 
     function toggleScheduled() {
@@ -253,8 +349,8 @@
         const table = document.getElementById('reportsTable');
         if (!table) return;
 
-        const startDate = document.getElementById('startDate').value || '';
-        const endDate = document.getElementById('endDate').value || '';
+        const startDate = isHebrewMode ? document.getElementById('startDate').value : startDateGregorian;
+        const endDate = isHebrewMode ? document.getElementById('endDate').value : endDateGregorian;
         const grade = document.getElementById('reportGrade').value || 'הכל';
 
         // Build minimal HTML workbook with RTL and basic styles
@@ -284,26 +380,5 @@
         URL.revokeObjectURL(url);
     }
 
-    // Update Hebrew dates under inputs using server conversion
-    function updateHebrewDates() {
-        const s = document.getElementById('startDate').value;
-        const e = document.getElementById('endDate').value;
-        if (s) {
-            fetch(`/api/date/hebrew?date=${encodeURIComponent(s)}`)
-                .then(r => r.json()).then(d => {
-                    document.getElementById('startHeb').textContent = d.hebrew ? d.hebrew : '';
-                }).catch(()=>{});
-        } else {
-            document.getElementById('startHeb').textContent = '';
-        }
-        if (e) {
-            fetch(`/api/date/hebrew?date=${encodeURIComponent(e)}`)
-                .then(r => r.json()).then(d => {
-                    document.getElementById('endHeb').textContent = d.hebrew ? d.hebrew : '';
-                }).catch(()=>{});
-        } else {
-            document.getElementById('endHeb').textContent = '';
-        }
-    }
 </script>
 {% endblock %}
