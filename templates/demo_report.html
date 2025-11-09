@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}דמו - דוחות נוכחות מודרניים{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/demo-report.css') }}">
+
+<div class="demo-report">
+    <div class="page-header">
+        <h1>דוחות נוכחות</h1>
+        <p>תצוגת דמו בלבד לעיצוב</p>
+    </div>
+
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <div class="segment">
+                <button class="seg-btn active">שבוע נוכחי</button>
+                <button class="seg-btn">חודש נוכחי</button>
+                <button class="seg-btn">רבעון</button>
+                <button class="seg-btn">אחרון</button>
+            </div>
+        </div>
+        <div class="toolbar-right">
+            <button class="ghost">דוחות מתוזמנים ▾</button>
+            <button class="primary">ייצוא דוח</button>
+        </div>
+    </div>
+
+    <div class="filters-card">
+        <div class="filters-row">
+            <div class="field">
+                <label>מתאריך</label>
+                <div class="input with-icon">
+                    <span class="icon">📅</span>
+                    <input type="text" value="01/10/2025" readonly>
+                </div>
+            </div>
+            <div class="field">
+                <label>עד תאריך</label>
+                <div class="input with-icon">
+                    <span class="icon">📅</span>
+                    <input type="text" value="30/10/2025" readonly>
+                </div>
+            </div>
+            <div class="field">
+                <label>סינון לפי תלמיד</label>
+                <div class="select">
+                    <select>
+                        <option>כל התלמידים</option>
+                        <option>שיעור א</option>
+                        <option>שיעור ב</option>
+                        <option>שיעור ג</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label>סינון לפי שיעור</label>
+                <div class="select">
+                    <select>
+                        <option>כל הכיתות</option>
+                        <option>שחרית</option>
+                        <option>סדר א'</option>
+                        <option>סדר ב'</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field align-end">
+                <button class="secondary w-full">הצג תוצאות</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="results-card">
+        <h3>תוצאות הדוח</h3>
+        <div class="placeholder">
+            אין נתונים להצגה בדמו זה
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

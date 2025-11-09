@@ -1,0 +1,649 @@
+{% extends "base.html" %}
+
+{% block title %}ניהול סילבוסים - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="exams-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>ניהול סילבוסים</h1>
+        <p>הגדרת חומר הלימוד לכל שיעור ומקצוע</p>
+    </div>
+
+    <!-- Add/Edit Syllabus Form -->
+    <div class="content-card">
+        <h2 class="card-title">הוספת/עריכת סילבוס</h2>
+
+        <form id="syllabusForm" class="syllabus-form">
+            <div class="form-grid">
+                <!-- Grade Selection -->
+                <div class="field">
+                    <label>שיעור <span class="required">*</span></label>
+                    <div class="select">
+                        <select id="syllabusGrade" required onchange="loadSyllabusSubjects()">
+                            <option value="">בחר שיעור</option>
+                            <option value="א'">א'</option>
+                            <option value="ב'">ב'</option>
+                            <option value="ג'">ג'</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Subject Selection -->
+                <div class="field">
+                    <label>מקצוע <span class="required">*</span></label>
+                    <div class="select">
+                        <select id="syllabusSubject" required onchange="updateSyllabusFields()">
+                            <option value="">בחר מקצוע</option>
+                            <option value="עיון">עיון</option>
+                            <option value="בקיאות">בקיאות</option>
+                            <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                            <option value="חומש">חומש</option>
+                            <option value="הלכה">הלכה</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Academic Year -->
+                <div class="field">
+                    <label>שנת לימודים <span class="required">*</span></label>
+                    <div class="input">
+                        <input type="text" id="academicYear" placeholder="תשפ״ה" required>
+                    </div>
+                </div>
+
+                <!-- Semester -->
+                <div class="field">
+                    <label>סמסטר</label>
+                    <div class="select">
+                        <select id="semester">
+                            <option value="">כל השנה</option>
+                            <option value="א'">סמסטר א'</option>
+                            <option value="ב'">סמסטר ב'</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Fields based on Subject -->
+            <div id="dynamicFields" class="dynamic-fields" style="margin-top: 20px; display: none;">
+                <!-- For Gemara subjects (עיון, בקיאות, גמרא עם רש"י) -->
+                <div id="gemaraFields" style="display: none;">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label>מסכת <span class="required">*</span></label>
+                            <div class="input">
+                                <input type="text" id="masechet" placeholder="לדוגמה: ברכות">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>מעמוד <span class="required">*</span></label>
+                            <div class="input">
+                                <input type="text" id="fromPage" placeholder="לדוגמה: ב'">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>עד עמוד <span class="required">*</span></label>
+                            <div class="input">
+                                <input type="text" id="toPage" placeholder="לדוגמה: כ'">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- For Chumash -->
+                <div id="chumashFields" style="display: none;">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label>חומש <span class="required">*</span></label>
+                            <div class="select">
+                                <select id="chumashName">
+                                    <option value="">בחר חומש</option>
+                                    <option value="בראשית">בראשית</option>
+                                    <option value="שמות">שמות</option>
+                                    <option value="ויקרא">ויקרא</option>
+                                    <option value="במדבר">במדבר</option>
+                                    <option value="דברים">דברים</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>פרשיות/פרקים <span class="required">*</span></label>
+                            <div class="input">
+                                <input type="text" id="chapters" placeholder="לדוגמה: בראשית-נח או פרקים א'-י'">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- For Halacha -->
+                <div id="halachaFields" style="display: none;">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label>ספר הלכה <span class="required">*</span></label>
+                            <div class="input">
+                                <input type="text" id="halachaBook" placeholder="לדוגמה: משנה ברורה, שולחן עורך">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>סימנים <span class="required">*</span></label>
+                            <div class="input">
+                                <input type="text" id="simanim" placeholder="לדוגמה: סימנים א'-נ'">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Notes -->
+            <div class="field" style="margin-top: 20px;">
+                <label>הערות נוספות</label>
+                <div class="input">
+                    <textarea id="notes" rows="3" placeholder="הערות, הבהרות או פרטים נוספים"></textarea>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions" style="margin-top: 25px;">
+                <button type="submit" class="btn btn-primary">שמור סילבוס</button>
+                <button type="button" class="btn btn-secondary" onclick="resetForm()">נקה טופס</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Existing Syllabi -->
+    <div class="content-card" style="margin-top: 30px;">
+        <h2 class="card-title">סילבוסים קיימים</h2>
+
+        <!-- Filter by Grade -->
+        <div class="filters-row" style="margin-bottom: 20px;">
+            <div class="field">
+                <label>סנן לפי שיעור</label>
+                <div class="select">
+                    <select id="filterGrade" onchange="loadSyllabi()">
+                        <option value="">כל השיעורים</option>
+                        <option value="א'">א'</option>
+                        <option value="ב'">ב'</option>
+                        <option value="ג'">ג'</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label>סנן לפי מקצוע</label>
+                <div class="select">
+                    <select id="filterSubject" onchange="loadSyllabi()">
+                        <option value="">כל המקצועות</option>
+                        <option value="עיון">עיון</option>
+                        <option value="בקיאות">בקיאות</option>
+                        <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                        <option value="חומש">חומש</option>
+                        <option value="הלכה">הלכה</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="reports-table" id="syllabiTable">
+                <thead>
+                    <tr>
+                        <th>שיעור</th>
+                        <th>מקצוע</th>
+                        <th>תוכן הסילבוס</th>
+                        <th>שנה</th>
+                        <th>סמסטר</th>
+                        <th>הערות</th>
+                        <th>פעולות</th>
+                    </tr>
+                </thead>
+                <tbody id="syllabiBody">
+                    <tr>
+                        <td colspan="7" class="empty-state">אין סילבוסים להצגה</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingSyllabusId = null;
+
+// Load syllabi on page load
+window.addEventListener('load', function() {
+    loadSyllabi();
+    // Set current Hebrew year as default
+    const hebrewYear = 'תשפ״ה'; // You can make this dynamic
+    document.getElementById('academicYear').value = hebrewYear;
+});
+
+// Update form fields based on selected subject
+function updateSyllabusFields() {
+    const subject = document.getElementById('syllabusSubject').value;
+    const dynamicFields = document.getElementById('dynamicFields');
+    const gemaraFields = document.getElementById('gemaraFields');
+    const chumashFields = document.getElementById('chumashFields');
+    const halachaFields = document.getElementById('halachaFields');
+
+    // Hide all
+    gemaraFields.style.display = 'none';
+    chumashFields.style.display = 'none';
+    halachaFields.style.display = 'none';
+    dynamicFields.style.display = 'none';
+
+    if (!subject) return;
+
+    dynamicFields.style.display = 'block';
+
+    if (subject === 'עיון' || subject === 'בקיאות' || subject === 'גמרא עם רש"י') {
+        gemaraFields.style.display = 'block';
+    } else if (subject === 'חומש') {
+        chumashFields.style.display = 'block';
+    } else if (subject === 'הלכה') {
+        halachaFields.style.display = 'block';
+    }
+}
+
+// Load existing syllabi
+function loadSyllabi() {
+    const grade = document.getElementById('filterGrade').value;
+    const subject = document.getElementById('filterSubject').value;
+
+    let url = '/api/exams/syllabi?';
+    if (grade) url += `grade=${encodeURIComponent(grade)}&`;
+    if (subject) url += `subject=${encodeURIComponent(subject)}&`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('syllabiBody');
+            if (!data.syllabi || data.syllabi.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">אין סילבוסים להצגה</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.syllabi.map(s => {
+                const contentText = formatSyllabusContent(s);
+                return `
+                    <tr>
+                        <td>${s.grade}</td>
+                        <td>${s.subject}</td>
+                        <td>${contentText}</td>
+                        <td>${s.academic_year || ''}</td>
+                        <td>${s.semester || '-'}</td>
+                        <td>${s.notes || '-'}</td>
+                        <td>
+                            <button class="btn-icon" onclick="editSyllabus(${s.id})" title="ערוך">✏️</button>
+                            <button class="btn-icon" onclick="deleteSyllabus(${s.id})" title="מחק">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        })
+        .catch(err => {
+            console.error(err);
+            alert('שגיאה בטעינת הסילבוסים');
+        });
+}
+
+// Format syllabus content for display
+function formatSyllabusContent(syllabus) {
+    const content = JSON.parse(syllabus.content || '{}');
+
+    if (content.masechet) {
+        return `מסכת ${content.masechet}, מעמוד ${content.from_page} עד ${content.to_page}`;
+    } else if (content.chumash) {
+        return `חומש ${content.chumash}, ${content.chapters}`;
+    } else if (content.halacha_book) {
+        return `${content.halacha_book}, ${content.simanim}`;
+    }
+
+    return syllabus.syllabus_text || '-';
+}
+
+// Submit form
+document.getElementById('syllabusForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const grade = document.getElementById('syllabusGrade').value;
+    const subject = document.getElementById('syllabusSubject').value;
+    const academicYear = document.getElementById('academicYear').value;
+    const semester = document.getElementById('semester').value;
+    const notes = document.getElementById('notes').value;
+
+    if (!grade || !subject || !academicYear) {
+        alert('אנא מלא את כל השדות החובה');
+        return;
+    }
+
+    // Build content object based on subject
+    let content = {};
+    let syllabusText = '';
+
+    if (subject === 'עיון' || subject === 'בקיאות' || subject === 'גמרא עם רש"י') {
+        const masechet = document.getElementById('masechet').value;
+        const fromPage = document.getElementById('fromPage').value;
+        const toPage = document.getElementById('toPage').value;
+
+        if (!masechet || !fromPage || !toPage) {
+            alert('אנא מלא את כל פרטי המסכת');
+            return;
+        }
+
+        content = { masechet, from_page: fromPage, to_page: toPage };
+        syllabusText = `מסכת ${masechet}, מעמוד ${fromPage} עד ${toPage}`;
+    } else if (subject === 'חומש') {
+        const chumashName = document.getElementById('chumashName').value;
+        const chapters = document.getElementById('chapters').value;
+
+        if (!chumashName || !chapters) {
+            alert('אנא מלא את פרטי החומש');
+            return;
+        }
+
+        content = { chumash: chumashName, chapters };
+        syllabusText = `חומש ${chumashName}, ${chapters}`;
+    } else if (subject === 'הלכה') {
+        const halachaBook = document.getElementById('halachaBook').value;
+        const simanim = document.getElementById('simanim').value;
+
+        if (!halachaBook || !simanim) {
+            alert('אנא מלא את פרטי ההלכה');
+            return;
+        }
+
+        content = { halacha_book: halachaBook, simanim };
+        syllabusText = `${halachaBook}, ${simanim}`;
+    }
+
+    const data = {
+        grade,
+        subject,
+        academic_year: academicYear,
+        semester,
+        content: JSON.stringify(content),
+        syllabus_text: syllabusText,
+        notes
+    };
+
+    const method = editingSyllabusId ? 'PUT' : 'POST';
+    const url = editingSyllabusId ? `/api/exams/syllabi/${editingSyllabusId}` : '/api/exams/syllabi';
+
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.error) {
+            alert('שגיאה: ' + result.error);
+            return;
+        }
+        alert(editingSyllabusId ? 'הסילבוס עודכן בהצלחה!' : 'הסילבוס נוסף בהצלחה!');
+        resetForm();
+        loadSyllabi();
+    })
+    .catch(err => {
+        console.error(err);
+        alert('שגיאה בשמירת הסילבוס');
+    });
+});
+
+// Edit syllabus
+function editSyllabus(id) {
+    fetch(`/api/exams/syllabi/${id}`)
+        .then(r => r.json())
+        .then(syllabus => {
+            editingSyllabusId = id;
+
+            document.getElementById('syllabusGrade').value = syllabus.grade;
+            document.getElementById('syllabusSubject').value = syllabus.subject;
+            document.getElementById('academicYear').value = syllabus.academic_year;
+            document.getElementById('semester').value = syllabus.semester || '';
+            document.getElementById('notes').value = syllabus.notes || '';
+
+            updateSyllabusFields();
+
+            const content = JSON.parse(syllabus.content || '{}');
+
+            if (content.masechet) {
+                document.getElementById('masechet').value = content.masechet;
+                document.getElementById('fromPage').value = content.from_page;
+                document.getElementById('toPage').value = content.to_page;
+            } else if (content.chumash) {
+                document.getElementById('chumashName').value = content.chumash;
+                document.getElementById('chapters').value = content.chapters;
+            } else if (content.halacha_book) {
+                document.getElementById('halachaBook').value = content.halacha_book;
+                document.getElementById('simanim').value = content.simanim;
+            }
+
+            // Scroll to form
+            document.getElementById('syllabusForm').scrollIntoView({ behavior: 'smooth' });
+        })
+        .catch(err => {
+            console.error(err);
+            alert('שגיאה בטעינת הסילבוס');
+        });
+}
+
+// Delete syllabus
+function deleteSyllabus(id) {
+    if (!confirm('האם אתה בטוח שברצונך למחוק סילבוס זה?')) {
+        return;
+    }
+
+    fetch(`/api/exams/syllabi/${id}`, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.error) {
+            alert('שגיאה: ' + result.error);
+            return;
+        }
+        alert('הסילבוס נמחק בהצלחה');
+        loadSyllabi();
+    })
+    .catch(err => {
+        console.error(err);
+        alert('שגיאה במחיקת הסילבוס');
+    });
+}
+
+// Reset form
+function resetForm() {
+    editingSyllabusId = null;
+    document.getElementById('syllabusForm').reset();
+    document.getElementById('dynamicFields').style.display = 'none';
+    document.getElementById('gemaraFields').style.display = 'none';
+    document.getElementById('chumashFields').style.display = 'none';
+    document.getElementById('halachaFields').style.display = 'none';
+
+    // Reset Hebrew year
+    const hebrewYear = 'תשפ״ה';
+    document.getElementById('academicYear').value = hebrewYear;
+}
+</script>
+
+<style>
+.exams-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 30px;
+}
+
+.page-header {
+    margin-bottom: 30px;
+}
+
+.page-header h1 {
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1a1a1a;
+}
+
+.page-header p {
+    font-size: 16px;
+    color: #666;
+}
+
+.content-card {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.card-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 25px;
+    color: #1a1a1a;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+}
+
+.field label {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.required {
+    color: #e53e3e;
+}
+
+.input input,
+.input textarea,
+.select select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.input input:focus,
+.input textarea:focus,
+.select select:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.input textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    margin: 0 2px;
+    transition: transform 0.2s;
+}
+
+.btn-icon:hover {
+    transform: scale(1.2);
+}
+
+.filters-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.reports-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.reports-table thead {
+    background: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.reports-table th,
+.reports-table td {
+    padding: 12px;
+    text-align: right;
+    font-size: 14px;
+}
+
+.reports-table th {
+    font-weight: 600;
+    color: #374151;
+}
+
+.reports-table tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.reports-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.empty-state {
+    text-align: center;
+    color: #9ca3af;
+    padding: 40px !important;
+}
+</style>
+{% endblock %}

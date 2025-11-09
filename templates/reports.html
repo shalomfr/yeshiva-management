@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}דוחות - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="reports-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>דוחות נוכחות</h1>
+        <p>צפייה ויצוא של דוחות נוכחות</p>
+    </div>
+
+    <!-- Toolbar + Filters (מעוצב בסגנון החדש) -->
+    <div class="reports-toolbar">
+        <div class="toolbar-left">
+            <div class="segment" role="tablist" aria-label="טווחי זמן">
+                <button class="seg-btn active" data-range="week" onclick="applyPreset(this)">שבוע נוכחי</button>
+                <button class="seg-btn" data-range="month" onclick="applyPreset(this)">חודש נוכחי</button>
+                <button class="seg-btn" data-range="quarter" onclick="applyPreset(this)">רבעון</button>
+                <button class="seg-btn" data-range="last" onclick="applyPreset(this)">אחרון</button>
+            </div>
+        </div>
+        <div class="toolbar-right">
+            <button class="ghost" onclick="toggleScheduled()">דוחות מתוזמנים ▾</button>
+            <button class="ghost" onclick="exportVisibleExcel()">ייצוא כפי שמוצג</button>
+            <button class="primary" onclick="exportToCSV()">ייצוא דוח</button>
+        </div>
+    </div>
+
+    <div class="filters-card">
+        <div class="filters-row">
+            <div class="field">
+                <label>מתאריך (תאריך עברי יוצג מתחת)</label>
+                <div class="input with-icon">
+                    <span class="icon">📅</span>
+                    <input type="text" id="startDate" placeholder="DD/MM/YYYY" value="01/01/2025" oninput="updateHebrewDates()">
+                </div>
+                <small id="startHeb" class="muted"></small>
+            </div>
+            <div class="field">
+                <label>עד תאריך (תאריך עברי יוצג מתחת)</label>
+                <div class="input with-icon">
+                    <span class="icon">📅</span>
+                    <input type="text" id="endDate" placeholder="DD/MM/YYYY" value="" oninput="updateHebrewDates()">
+                </div>
+                <small id="endHeb" class="muted"></small>
+            </div>
+            <div class="field">
+                <label>סינון לפי שיעור</label>
+                <div class="select">
+                    <select id="reportGrade">
+                        <option value="הכל">כל השיעורים</option>
+                        <option value="א'">א'</option>
+                        <option value="ב'">ב'</option>
+                        <option value="ג'">ג'</option>
+                        <option value="ד'">ד'</option>
+                        <option value="ה'">ה'</option>
+                        <option value="ו'">ו'</option>
+                        <option value="ז'">ז'</option>
+                        <option value="ח'">ח'</option>
+                    </select>
+                </div>
+                <small>&nbsp;</small>
+            </div>
+            <div class="field">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary w-full" onclick="generateReport('custom')">הצג תוצאות</button>
+                <small>&nbsp;</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div class="content-card">
+        <h2 class="card-title">תוצאות הדוח</h2>
+
+        <div class="table-container">
+            <table class="reports-table sticky" id="reportsTable">
+                <thead>
+                    <tr>
+                        <th>שם</th>
+                        <th>שיעור</th>
+                        <th>תעודת זהות</th>
+                        <th>נוכחויות</th>
+                        <th>העדרויות</th>
+                        <th>אחוז</th>
+                    </tr>
+                </thead>
+                <tbody id="reportsBody">
+                    <tr>
+                        <td colspan="6" class="empty-state">אין נתונים להצגה עבור ההגדרות הנוכחיות</td>
+                    </tr>
+                </tbody>
+                <tfoot id="reportsFooter"></tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Set today's date as default
+    window.addEventListener('load', function() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        document.getElementById('endDate').value = `${day}/${month}/${year}`;
+        updateHebrewDates();
+    });
+
+    function generateReport(reportType) {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+
+        if (!startDate || !endDate) {
+            alert('בחר טווח תאריכים');
+            return;
+        }
+
+        const grade = document.getElementById('reportGrade').value;
+
+        fetch(`/api/reports/attendance?start_date=${startDate}&end_date=${endDate}&grade=${encodeURIComponent(grade)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('שגיאה: ' + data.error);
+                    return;
+                }
+                const body = document.getElementById('reportsBody');
+                if (!data.rows || data.rows.length === 0) {
+                    body.innerHTML = `<tr><td colspan="6" class="empty-state">אין נתונים לטווח שנבחר</td></tr>`;
+                    document.getElementById('reportsFooter').innerHTML = '';
+                    return;
+                }
+                body.innerHTML = data.rows.map(r => `
+                    <tr>
+                        <td>${r.name}</td>
+                        <td>${r.grade}</td>
+                        <td>${r.id_number || ''}</td>
+                        <td>${r.present}</td>
+                        <td>${r.absent}</td>
+                        <td>${r.percent}%</td>
+                    </tr>
+                `).join('');
+
+                // Totals footer
+                const totals = data.rows.reduce((acc, r) => {
+                    acc.present += Number(r.present) || 0;
+                    acc.absent += Number(r.absent) || 0;
+                    acc.count += 1;
+                    acc.percentSum += Number(r.percent) || 0;
+                    return acc;
+                }, {present:0, absent:0, count:0, percentSum:0});
+
+                const avgPercent = totals.count ? Math.round(totals.percentSum / totals.count) : 0;
+                document.getElementById('reportsFooter').innerHTML = `
+                    <tr>
+                        <th>סה"כ/ממוצע</th>
+                        <th></th>
+                        <th></th>
+                        <th>${totals.present}</th>
+                        <th>${totals.absent}</th>
+                        <th>${avgPercent}%</th>
+                    </tr>
+                `;
+            })
+            .catch(err => {
+                console.error(err);
+                alert('שגיאה בטעינת הדוח');
+            });
+    }
+
+    function exportToCSV() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const grade = document.getElementById('reportGrade').value;
+
+        if (!startDate || !endDate) {
+            alert('בחר טווח תאריכים');
+            return;
+        }
+
+        fetch(`/api/export/csv?start_date=${startDate}&end_date=${endDate}&grade=${encodeURIComponent(grade)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('שגיאה: ' + data.error);
+                    return;
+                }
+
+                // Create a blob from the CSV data
+                const blob = new Blob([data.csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+
+                link.setAttribute("href", url);
+                link.setAttribute("download", data.filename);
+                link.style.visibility = 'hidden';
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                alert('הדוח יוצא בהצלחה!');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('שגיאה בייצוא');
+            });
+    }
+
+    // Preset range helpers
+    function applyPreset(button) {
+        document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+        button.classList.add('active');
+        const type = button.getAttribute('data-range');
+        const today = new Date();
+
+        function fmt(d) {
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yy = d.getFullYear();
+            return `${dd}/${mm}/${yy}`;
+        }
+
+        let start;
+        if (type === 'week') {
+            const first = new Date(today);
+            const day = first.getDay();
+            first.setDate(first.getDate() - day); // ראשון
+            start = first;
+        } else if (type === 'month') {
+            start = new Date(today.getFullYear(), today.getMonth(), 1);
+        } else if (type === 'quarter') {
+            const qStartMonth = Math.floor(today.getMonth() / 3) * 3;
+            start = new Date(today.getFullYear(), qStartMonth, 1);
+        } else {
+            // last 30 days
+            start = new Date(today);
+            start.setDate(start.getDate() - 30);
+        }
+
+        document.getElementById('startDate').value = fmt(start);
+        document.getElementById('endDate').value = fmt(today);
+    }
+
+    function toggleScheduled() {
+        alert('בקרוב: דוחות מתוזמנים');
+    }
+
+    // Export current visible table (including footer) to Excel (HTML-based .xls)
+    function exportVisibleExcel() {
+        const table = document.getElementById('reportsTable');
+        if (!table) return;
+
+        const startDate = document.getElementById('startDate').value || '';
+        const endDate = document.getElementById('endDate').value || '';
+        const grade = document.getElementById('reportGrade').value || 'הכל';
+
+        // Build minimal HTML workbook with RTL and basic styles
+        const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
+            <meta charset="UTF-8">
+            <style>
+                table { border-collapse: collapse; }
+                th, td { border: 1px solid #CCCCCC; padding: 6px; text-align: center; }
+                thead th { background: #e8f0fe; }
+                tfoot th { background: #f1f3f4; font-weight: bold; }
+            </style>
+            </head><body>
+            <h3>דוח נוכחות</h3>
+            <div>טווח: ${startDate} - ${endDate} | שיעור: ${grade}</div>
+            ${table.outerHTML}
+            </body></html>`;
+
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+        a.href = url;
+        a.download = `דוח_נוכחות_כפי_שמוצג_${ts}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Update Hebrew dates under inputs using server conversion
+    function updateHebrewDates() {
+        const s = document.getElementById('startDate').value;
+        const e = document.getElementById('endDate').value;
+        if (s) {
+            fetch(`/api/date/hebrew?date=${encodeURIComponent(s)}`)
+                .then(r => r.json()).then(d => {
+                    document.getElementById('startHeb').textContent = d.hebrew ? d.hebrew : '';
+                }).catch(()=>{});
+        } else {
+            document.getElementById('startHeb').textContent = '';
+        }
+        if (e) {
+            fetch(`/api/date/hebrew?date=${encodeURIComponent(e)}`)
+                .then(r => r.json()).then(d => {
+                    document.getElementById('endHeb').textContent = d.hebrew ? d.hebrew : '';
+                }).catch(()=>{});
+        } else {
+            document.getElementById('endHeb').textContent = '';
+        }
+    }
+</script>
+{% endblock %}

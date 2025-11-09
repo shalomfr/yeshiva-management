@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Windows reserved names
+nul
+con
+prn
+aux
+com1
+com2
+com3
+com4
+lpt1
+lpt2
+
+# Database
+*.db-journal
+
+# Logs
+*.log
+
+# Test files
+test_*.pdf

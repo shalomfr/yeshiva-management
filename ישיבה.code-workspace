@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"claudeCodeChat.permissions.yoloMode": true,
+		"python.defaultInterpreterPath": "python",
+		"files.exclude": {
+			"**/__pycache__": true,
+			"**/*.pyc": true
+		}
+	}
+}

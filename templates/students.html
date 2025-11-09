@@ -1,0 +1,599 @@
+{% extends "base.html" %}
+
+{% block title %}ניהול תלמידים - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="students-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>ניהול תלמידים</h1>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-bar">
+        <button class="btn btn-success" onclick="openAddStudentDialog()">
+            <span>➕</span> הוסף תלמיד חדש
+        </button>
+        <button class="btn btn-secondary" onclick="refreshStudents()">
+            <span>🔄</span> רענן
+        </button>
+    </div>
+
+    <!-- Students Table with Filters -->
+    <div class="content-card">
+        <!-- Advanced Multi-Column Filter Bar -->
+        <div class="advanced-filter-bar">
+            <!-- Search Box -->
+            <div class="filter-section search-section">
+                <input type="text" id="searchInput" placeholder="🔍 חיפוש חופשי (שם, ת.ז.)..."
+                       onkeyup="applyFilters()">
+            </div>
+
+            <!-- Grade Filter - 3 Toggle Buttons -->
+            <div class="filter-section grade-section">
+                <label class="filter-label">שיעור:</label>
+                <div class="grade-toggle-buttons">
+                    <button class="grade-btn active" data-grade="א'" onclick="toggleGradeFilter('א')">א'</button>
+                    <button class="grade-btn active" data-grade="ב'" onclick="toggleGradeFilter('ב')">ב'</button>
+                    <button class="grade-btn active" data-grade="ג'" onclick="toggleGradeFilter('ג')">ג'</button>
+                </div>
+            </div>
+
+            <!-- City Filter - Dropdown with Checkboxes -->
+            <div class="filter-section city-section">
+                <label class="filter-label">עיר:</label>
+                <div class="dropdown-filter">
+                    <button class="dropdown-btn" onclick="toggleCityDropdown()">
+                        <span id="cityFilterText">כל הערים</span> ▼
+                    </button>
+                    <div class="dropdown-content" id="cityDropdown" style="display: none;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" value="all" checked onchange="toggleAllCities()"> הכל
+                        </label>
+                        <div id="cityCheckboxes"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Filter - Toggle Buttons -->
+            <div class="filter-section status-section">
+                <label class="filter-label">סטטוס:</label>
+                <div class="status-toggle-buttons">
+                    <button class="status-btn active" data-status="פעיל" onclick="toggleStatusFilter('פעיל')">פעיל</button>
+                    <button class="status-btn active" data-status="לא פעיל" onclick="toggleStatusFilter('לא פעיל')">לא פעיל</button>
+                </div>
+            </div>
+
+            <!-- Clear Filters Button -->
+            <button class="btn-clear-filters" onclick="clearAllFilters()">🔄 נקה הכל</button>
+        </div>
+
+        <h2 class="card-title">רשימת תלמידים</h2>
+        <div class="table-wrapper">
+            <table class="students-table">
+                <thead>
+                    <tr>
+                        <th onclick="handleSort('first_name')" data-column="first_name">שם פרטי <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('last_name')" data-column="last_name">שם משפחה <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('grade')" data-column="grade">שיעור <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('id_number')" data-column="id_number">ת.ז. <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('birth_date_hebrew')" data-column="birth_date_hebrew">תאריך לידה <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('address')" data-column="address">כתובת <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('city')" data-column="city">עיר <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('father_name')" data-column="father_name">שם האב <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('father_id_number')" data-column="father_id_number">ת.ז. אב <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('mother_name')" data-column="mother_name">שם האם <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('mother_id_number')" data-column="mother_id_number">ת.ז. אם <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('home_phone')" data-column="home_phone">טלפון בית <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('mobile_phone')" data-column="mobile_phone">פלאפון <span class="sort-indicator"></span></th>
+                        <th onclick="handleSort('status')" data-column="status">סטטוס <span class="sort-indicator"></span></th>
+                        <th>פעולות</th>
+                    </tr>
+                </thead>
+                <tbody id="studentsList">
+                    <tr class="loading-row">
+                        <td colspan="15">טוען נתונים...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="emptyMessage" class="empty-message" style="display: none;">
+            לא נמצאו תלמידים בהתאם לפילטרים שלך
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Student Modal -->
+<div id="studentModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>הוסף תלמיד חדש</h2>
+            <span class="close" onclick="closeAddStudentDialog()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="studentForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="studentFirstName">שם פרטי:<span class="required">*</span></label>
+                        <input type="text" id="studentFirstName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentLastName">שם משפחה:<span class="required">*</span></label>
+                        <input type="text" id="studentLastName" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="studentIdNumber">ת.ז.:</label>
+                        <input type="text" id="studentIdNumber" maxlength="9">
+                    </div>
+                    <div class="form-group">
+                        <label for="studentBirthDate">תאריך לידה:</label>
+                        <input type="text" id="studentBirthDate" placeholder="יום/חודש/שנה">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="studentAddress">כתובת:</label>
+                        <input type="text" id="studentAddress">
+                    </div>
+                    <div class="form-group">
+                        <label for="studentCity">עיר:</label>
+                        <input type="text" id="studentCity">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fatherName">שם האב:</label>
+                        <input type="text" id="fatherName">
+                    </div>
+                    <div class="form-group">
+                        <label for="fatherIdNumber">ת.ז. אב:</label>
+                        <input type="text" id="fatherIdNumber" maxlength="9">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="motherName">שם האם:</label>
+                        <input type="text" id="motherName">
+                    </div>
+                    <div class="form-group">
+                        <label for="motherIdNumber">ת.ז. אם:</label>
+                        <input type="text" id="motherIdNumber" maxlength="9">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="homePhone">טלפון בית:</label>
+                        <input type="tel" id="homePhone">
+                    </div>
+                    <div class="form-group">
+                        <label for="mobilePhone">פלאפון:</label>
+                        <input type="tel" id="mobilePhone">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="studentGrade">שיעור:<span class="required">*</span></label>
+                        <select id="studentGrade" required>
+                            <option value="">בחר שיעור...</option>
+                            <option value="א'">א'</option>
+                            <option value="ב'">ב'</option>
+                            <option value="ג'">ג'</option>
+                            <option value="ד'">ד'</option>
+                            <option value="ה'">ה'</option>
+                            <option value="ו'">ו'</option>
+                            <option value="ז'">ז'</option>
+                            <option value="ח'">ח'</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAddStudentDialog()">ביטול</button>
+            <button class="btn btn-success" onclick="saveStudent()">שמור</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allStudents = [];
+    let sortRules = [];  // מערך כללי המיון
+
+    // מצב הסינונים
+    let activeFilters = {
+        search: '',
+        grades: ['א\'', 'ב\'', 'ג\''],  // כל השיעורים פעילים בברירת מחדל
+        cities: [],  // ריק = הכל פעיל
+        statuses: ['פעיל', 'לא פעיל']  // שני הסטטוסים פעילים בברירת מחדל
+    };
+
+    function loadStudents() {
+        fetch('/api/students')
+            .then(response => response.json())
+            .then(data => {
+                allStudents = data;
+                buildCityFilter();  // בניית רשימת ערים דינמית
+                applySortAndDisplay();
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    // בניית רשימת ערים דינמית
+    function buildCityFilter() {
+        const cities = [...new Set(allStudents.map(s => s.city).filter(c => c))].sort();
+        const cityCheckboxes = document.getElementById('cityCheckboxes');
+
+        cityCheckboxes.innerHTML = cities.map(city => `
+            <label class="checkbox-label">
+                <input type="checkbox" value="${city}" checked onchange="toggleCityFilter('${city}')"> ${city}
+            </label>
+        `).join('');
+
+        activeFilters.cities = cities;  // כל הערים פעילות בברירת מחדל
+    }
+
+    // פונקציה לטיפול בלחיצה על כותרת טבלה
+    function handleSort(column) {
+        const existingIndex = sortRules.findIndex(rule => rule.column === column);
+
+        if (existingIndex !== -1) {
+            // העמודה כבר קיימת - הפוך כיוון או מחק
+            if (sortRules[existingIndex].direction === 'asc') {
+                sortRules[existingIndex].direction = 'desc';
+            } else {
+                // לחיצה שלישית - מחק את הכלל
+                sortRules.splice(existingIndex, 1);
+            }
+        } else {
+            // העמודה חדשה - הוסף בסוף
+            sortRules.push({
+                column: column,
+                direction: 'asc',
+                order: sortRules.length + 1
+            });
+        }
+
+        // עדכן מספרי סדר
+        sortRules.forEach((rule, index) => rule.order = index + 1);
+
+        applySortAndDisplay();
+    }
+
+    // פונקציה לביצוע הסינון והמיון
+    function applySortAndDisplay() {
+        // עדכון מצב חיפוש
+        activeFilters.search = document.getElementById('searchInput')?.value.toLowerCase() || '';
+
+        // סינון מתקדם רב-עמודתי
+        let filtered = allStudents.filter(student => {
+            // חיפוש חופשי
+            const matchSearch = !activeFilters.search ||
+                               student.first_name?.toLowerCase().includes(activeFilters.search) ||
+                               student.last_name?.toLowerCase().includes(activeFilters.search) ||
+                               student.id_number?.includes(activeFilters.search);
+
+            // סינון שיעור (מספר אפשרויות)
+            const matchGrade = activeFilters.grades.includes(student.grade);
+
+            // סינון עיר (ריק = הכל)
+            const matchCity = activeFilters.cities.length === 0 ||
+                             activeFilters.cities.includes(student.city) ||
+                             (!student.city && activeFilters.cities.includes(''));
+
+            // סינון סטטוס
+            const matchStatus = activeFilters.statuses.includes(student.status);
+
+            return matchSearch && matchGrade && matchCity && matchStatus;
+        });
+
+        // אם אין כללי מיון, הצג כמו שזה
+        if (sortRules.length === 0) {
+            displayStudents(filtered);
+            updateSortIndicators();
+            return;
+        }
+
+        // מיון רב-עמודתי
+        const sorted = [...filtered].sort((a, b) => {
+            for (const rule of sortRules) {
+                const aValue = a[rule.column] || '';
+                const bValue = b[rule.column] || '';
+
+                let comparison = 0;
+                if (aValue < bValue) comparison = -1;
+                if (aValue > bValue) comparison = 1;
+
+                // אם יש הבדל, החזר את התוצאה
+                if (comparison !== 0) {
+                    return rule.direction === 'asc' ? comparison : -comparison;
+                }
+            }
+            return 0;
+        });
+
+        displayStudents(sorted);
+        updateSortIndicators();
+    }
+
+    // פונקציה לעדכון האינדיקטורים הויזואליים
+    function updateSortIndicators() {
+        // נקה את כל האינדיקטורים
+        document.querySelectorAll('.sort-indicator').forEach(span => {
+            span.innerHTML = '';
+            span.parentElement.classList.remove('sorted-asc', 'sorted-desc');
+        });
+
+        // הוסף אינדיקטורים לעמודות מסוננות
+        sortRules.forEach(rule => {
+            const th = document.querySelector(`th[data-column="${rule.column}"]`);
+            if (th) {
+                const indicator = th.querySelector('.sort-indicator');
+
+                // חץ + מספר סדר (אם יש יותר מכלל אחד)
+                const arrow = rule.direction === 'asc' ? '↑' : '↓';
+                const orderNum = sortRules.length > 1 ? `<sub>${rule.order}</sub>` : '';
+                indicator.innerHTML = `${arrow}${orderNum}`;
+
+                // הוסף class לעיצוב
+                th.classList.add(rule.direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            }
+        });
+    }
+
+    function displayStudents(students) {
+        const tbody = document.getElementById('studentsList');
+        const emptyMessage = document.getElementById('emptyMessage');
+
+        if (students.length === 0) {
+            tbody.innerHTML = '';
+            emptyMessage.style.display = 'block';
+            return;
+        }
+
+        emptyMessage.style.display = 'none';
+        tbody.innerHTML = students.map(student => `
+            <tr>
+                <td>${student.first_name || '-'}</td>
+                <td>${student.last_name || '-'}</td>
+                <td>${student.grade}</td>
+                <td>${student.id_number || '-'}</td>
+                <td>${student.birth_date_hebrew || '-'}</td>
+                <td>${student.address || '-'}</td>
+                <td>${student.city || '-'}</td>
+                <td>${student.father_name || '-'}</td>
+                <td>${student.father_id_number || '-'}</td>
+                <td>${student.mother_name || '-'}</td>
+                <td>${student.mother_id_number || '-'}</td>
+                <td>${student.home_phone || '-'}</td>
+                <td>${student.mobile_phone || '-'}</td>
+                <td><span class="status-badge ${student.status === 'פעיל' ? 'active' : 'inactive'}">${student.status}</span></td>
+                <td class="action-buttons">
+                    <button class="btn-icon edit" onclick="editStudent(${student.id})">✏️</button>
+                    <button class="btn-icon delete" onclick="deleteStudent(${student.id})">🗑️</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // ===== פונקציות סינון חדשות =====
+
+    // סינון שיעור - Toggle
+    function toggleGradeFilter(grade) {
+        const gradeWithQuote = grade + '\'';
+        const btn = document.querySelector(`.grade-btn[data-grade="${gradeWithQuote}"]`);
+
+        if (activeFilters.grades.includes(gradeWithQuote)) {
+            // הסר את השיעור
+            activeFilters.grades = activeFilters.grades.filter(g => g !== gradeWithQuote);
+            btn.classList.remove('active');
+        } else {
+            // הוסף את השיעור
+            activeFilters.grades.push(gradeWithQuote);
+            btn.classList.add('active');
+        }
+
+        applyFilters();
+    }
+
+    // פתיחה/סגירה של dropdown ערים
+    function toggleCityDropdown() {
+        const dropdown = document.getElementById('cityDropdown');
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Toggle כל הערים
+    function toggleAllCities() {
+        const allCheckbox = event.target;
+        const cityCheckboxes = document.querySelectorAll('#cityCheckboxes input[type="checkbox"]');
+
+        if (allCheckbox.checked) {
+            // סמן הכל
+            cityCheckboxes.forEach(cb => cb.checked = true);
+            const cities = [...new Set(allStudents.map(s => s.city).filter(c => c))];
+            activeFilters.cities = cities;
+        } else {
+            // בטל הכל
+            cityCheckboxes.forEach(cb => cb.checked = false);
+            activeFilters.cities = [];
+        }
+
+        updateCityFilterText();
+        applyFilters();
+    }
+
+    // Toggle עיר ספציפית
+    function toggleCityFilter(city) {
+        const allCheckbox = document.querySelector('#cityDropdown input[value="all"]');
+
+        if (activeFilters.cities.includes(city)) {
+            activeFilters.cities = activeFilters.cities.filter(c => c !== city);
+        } else {
+            activeFilters.cities.push(city);
+        }
+
+        // עדכון checkbox "הכל"
+        const allCities = [...new Set(allStudents.map(s => s.city).filter(c => c))];
+        allCheckbox.checked = activeFilters.cities.length === allCities.length;
+
+        updateCityFilterText();
+        applyFilters();
+    }
+
+    // עדכון טקסט כפתור הערים
+    function updateCityFilterText() {
+        const textSpan = document.getElementById('cityFilterText');
+        const allCities = [...new Set(allStudents.map(s => s.city).filter(c => c))];
+
+        if (activeFilters.cities.length === 0 || activeFilters.cities.length === allCities.length) {
+            textSpan.textContent = 'כל הערים';
+        } else if (activeFilters.cities.length === 1) {
+            textSpan.textContent = activeFilters.cities[0];
+        } else {
+            textSpan.textContent = `${activeFilters.cities.length} ערים`;
+        }
+    }
+
+    // סינון סטטוס - Toggle
+    function toggleStatusFilter(status) {
+        const btn = document.querySelector(`.status-btn[data-status="${status}"]`);
+
+        if (activeFilters.statuses.includes(status)) {
+            activeFilters.statuses = activeFilters.statuses.filter(s => s !== status);
+            btn.classList.remove('active');
+        } else {
+            activeFilters.statuses.push(status);
+            btn.classList.add('active');
+        }
+
+        applyFilters();
+    }
+
+    // ניקוי כל הסינונים
+    function clearAllFilters() {
+        // איפוס מצב סינונים
+        activeFilters = {
+            search: '',
+            grades: ['א\'', 'ב\'', 'ג\''],
+            cities: [],
+            statuses: ['פעיל', 'לא פעיל']
+        };
+
+        // איפוס UI
+        document.getElementById('searchInput').value = '';
+
+        // כפתורי שיעור
+        document.querySelectorAll('.grade-btn').forEach(btn => btn.classList.add('active'));
+
+        // checkboxes ערים
+        document.querySelectorAll('#cityDropdown input[type="checkbox"]').forEach(cb => cb.checked = true);
+        const cities = [...new Set(allStudents.map(s => s.city).filter(c => c))];
+        activeFilters.cities = cities;
+        updateCityFilterText();
+
+        // כפתורי סטטוס
+        document.querySelectorAll('.status-btn').forEach(btn => btn.classList.add('active'));
+
+        // איפוס מיון
+        sortRules = [];
+
+        applyFilters();
+    }
+
+    // פונקציה מרכזית להפעלת סינון
+    function applyFilters() {
+        applySortAndDisplay();
+    }
+
+    // סגירת dropdown כשלוחצים בחוץ
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('cityDropdown');
+        const btn = event.target.closest('.dropdown-btn');
+
+        if (!btn && !event.target.closest('.dropdown-content')) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    function openAddStudentDialog() {
+        document.getElementById('studentForm').reset();
+        document.getElementById('studentModal').style.display = 'block';
+    }
+
+    function closeAddStudentDialog() {
+        document.getElementById('studentModal').style.display = 'none';
+        document.getElementById('studentForm').reset();
+    }
+
+    async function saveStudent() {
+        // איסוף נתונים מהטופס
+        const studentData = {
+            first_name: document.getElementById('studentFirstName').value.trim(),
+            last_name: document.getElementById('studentLastName').value.trim(),
+            id_number: document.getElementById('studentIdNumber').value.trim(),
+            birth_date_hebrew: document.getElementById('studentBirthDate').value.trim(),
+            address: document.getElementById('studentAddress').value.trim(),
+            city: document.getElementById('studentCity').value.trim(),
+            father_name: document.getElementById('fatherName').value.trim(),
+            father_id_number: document.getElementById('fatherIdNumber').value.trim(),
+            mother_name: document.getElementById('motherName').value.trim(),
+            mother_id_number: document.getElementById('motherIdNumber').value.trim(),
+            home_phone: document.getElementById('homePhone').value.trim(),
+            mobile_phone: document.getElementById('mobilePhone').value.trim(),
+            current_grade: document.getElementById('studentGrade').value
+        };
+
+        // בדיקת שדות חובה
+        if (!studentData.first_name || !studentData.last_name || !studentData.current_grade) {
+            alert('יש למלא שם פרטי, שם משפחה ושיעור');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/students', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(studentData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('התלמיד נוסף בהצלחה!');
+                closeAddStudentDialog();
+                loadStudents(); // רענון הרשימה
+            } else {
+                alert('שגיאה: ' + result.error);
+            }
+        } catch (error) {
+            alert('שגיאה בשמירת התלמיד: ' + error.message);
+        }
+    }
+
+    function editStudent(id) {
+        alert(`עריכה של תלמיד ${id} - בעדכון`);
+    }
+
+    function deleteStudent(id) {
+        if (confirm('האם אתה בטוח שברצונך למחוק תלמיד זה?')) {
+            alert(`מחיקה של תלמיד ${id} - בעדכון`);
+        }
+    }
+
+    function refreshStudents() {
+        loadStudents();
+    }
+
+    // Load on page load
+    window.addEventListener('load', loadStudents);
+</script>
+{% endblock %}

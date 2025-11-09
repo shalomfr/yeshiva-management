@@ -1,0 +1,594 @@
+{% extends "base.html" %}
+
+{% block title %}נוכחות שחרית - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="attendance-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>נוכחות שחרית</h1>
+    </div>
+
+    <!-- Week Navigation -->
+    <div class="week-navigation">
+        <button class="btn btn-secondary" onclick="previousWeek()">← שבוע קודם</button>
+        <div class="week-display">
+            <div id="weekRange" class="week-range">תאריך</div>
+        </div>
+        <button class="btn btn-secondary" onclick="goToThisWeek()">השבוע</button>
+        <button class="btn btn-secondary" onclick="nextWeek()">שבוע הבא →</button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-row">
+        <!-- Present -->
+        <div class="stat-card card-success">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="presentCount">0</div>
+                <div class="card-label">נוכחים</div>
+            </div>
+        </div>
+
+        <!-- Absent -->
+        <div class="stat-card card-danger">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="absentCount">0</div>
+                <div class="card-label">חסרים</div>
+            </div>
+        </div>
+
+        <!-- Unmarked -->
+        <div class="stat-card card-warning">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="unmarkedCount">0</div>
+                <div class="card-label">לא סומנו</div>
+            </div>
+        </div>
+
+        <!-- Percentage -->
+        <div class="stat-card card-info">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="percentCount">0%</div>
+                <div class="card-label">אחוז נוכחות</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="action-bar">
+        <button class="btn btn-primary" onclick="startRapidFilling()">
+            <span>⚡</span> מילוי רץ
+        </button>
+        <button class="btn btn-success" onclick="markAllPresent()">
+            <span>✓</span> סמן את כולם נוכחים
+        </button>
+        <button class="btn btn-danger" onclick="markAllAbsent()">
+            <span>✗</span> סמן את כולם חסרים
+        </button>
+    </div>
+
+    <!-- Lesson Selector Tabs -->
+    <div class="class-selector">
+        <button class="class-tab active" onclick="selectClass('א')">
+            <span class="class-letter">א</span>
+            <span class="class-label">שיעור א</span>
+            <span class="class-count" id="countא">0</span>
+        </button>
+        <button class="class-tab" onclick="selectClass('ב')">
+            <span class="class-letter">ב</span>
+            <span class="class-label">שיעור ב</span>
+            <span class="class-count" id="countב">0</span>
+        </button>
+        <button class="class-tab" onclick="selectClass('ג')">
+            <span class="class-letter">ג</span>
+            <span class="class-label">שיעור ג</span>
+            <span class="class-count" id="countג">0</span>
+        </button>
+    </div>
+
+    <!-- Weekly Attendance Table -->
+    <div class="content-card">
+        <h2 class="card-title" id="classTitle">נוכחות שחרית - שיעור א</h2>
+        <div class="weekly-table-wrapper">
+            <table class="weekly-attendance-table" id="attendanceTable">
+                <thead>
+                    <tr id="headerRow">
+                        <th class="student-col">שם התלמיד</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="8" class="loading">טוען נתונים...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Rapid Filling Modal -->
+<div id="rapidFillingModal" class="modal">
+    <div class="modal-content rapid-filling-modal-new">
+        <div class="modal-header">
+            <h2>⚡ מילוי רץ</h2>
+            <span class="close" onclick="closeRapidFilling()">&times;</span>
+        </div>
+        <div class="modal-body rapid-filling-body-new">
+            <div class="rapid-progress-header">
+                <div class="progress-stat">
+                    <span class="progress-label">נוכח</span>
+                    <span class="progress-number" id="rapidPresentCount">0</span>
+                </div>
+                <div class="progress-stat">
+                    <span class="progress-label">חסר</span>
+                    <span class="progress-number absent" id="rapidAbsentCount">0</span>
+                </div>
+                <div class="progress-stat">
+                    <span class="progress-label">ממתין</span>
+                    <span class="progress-number pending" id="rapidUnmarkedCount">0</span>
+                </div>
+            </div>
+
+            <div class="rapid-filling-students-container" id="rapidFillingContainer">
+                <p class="loading">טוען נתונים...</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeRapidFilling()">סגור</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let weekStartDate = getStartOfWeek(new Date());
+    let weeklyData = {};
+    let selectedClass = 'א';
+
+    function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function getStartOfWeek(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day;
+        return new Date(d.setDate(diff));
+    }
+
+    function getWeekDates(startDate) {
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(startDate);
+            date.setDate(date.getDate() + i);
+            dates.push(date);
+        }
+        return dates;
+    }
+
+    function getHebrewDayName(dayIndex) {
+        const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+        return days[dayIndex];
+    }
+
+    function getClassStudents(students, classGrade) {
+        return students.filter(student => student.grade === classGrade);
+    }
+
+    function selectClass(classGrade) {
+        selectedClass = classGrade;
+        document.querySelectorAll('.class-tab').forEach(tab => tab.classList.remove('active'));
+        event.target.closest('.class-tab').classList.add('active');
+
+        const lessonLabel = classGrade === 'א' ? 'שיעור א' : classGrade === 'ב' ? 'שיעור ב' : 'שיעור ג';
+        document.getElementById('classTitle').textContent = `נוכחות שחרית - ${lessonLabel}`;
+
+        displayWeeklyTable();
+    }
+
+    function loadWeeklyAttendance() {
+        const weekDates = getWeekDates(weekStartDate);
+        let loadedCount = 0;
+        weeklyData = {};
+
+        weekDates.forEach(date => {
+            const dateStr = formatDate(date);
+            fetch(`/api/attendance/${dateStr}`)
+                .then(response => response.json())
+                .then(data => {
+                    weeklyData[dateStr] = data;
+                    loadedCount++;
+                    if (loadedCount === 7) {
+                        updateWeekDisplay();
+                        displayWeeklyTable();
+                    }
+                })
+                .catch(error => console.error('Error loading attendance:', error));
+        });
+    }
+
+    function updateWeekDisplay() {
+        const weekDates = getWeekDates(weekStartDate);
+        const firstDate = weekDates[0];
+        const lastDate = weekDates[6];
+
+        const firstData = weeklyData[formatDate(firstDate)];
+        const lastData = weeklyData[formatDate(lastDate)];
+
+        let weekRangeText = '';
+        if (firstData && lastData) {
+            weekRangeText = `${firstData.hebrew_date} - ${lastData.hebrew_date}`;
+        }
+        document.getElementById('weekRange').textContent = weekRangeText || 'טוען תאריכים...';
+    }
+
+    function displayWeeklyTable() {
+        const weekDates = getWeekDates(weekStartDate);
+        const headerRow = document.getElementById('headerRow');
+        const tableBody = document.getElementById('tableBody');
+
+        headerRow.innerHTML = '<th class="student-col">שם התלמיד</th>';
+        weekDates.forEach(date => {
+            const dateStr = formatDate(date);
+            const dayData = weeklyData[dateStr] || {};
+            const dayName = getHebrewDayName(date.getDay());
+            const hebrewDate = dayData.hebrew_date || '';
+            headerRow.innerHTML += `<th class="day-col" title="${hebrewDate}">${dayName}<br><small>${hebrewDate}</small></th>`;
+        });
+
+        const firstDate = formatDate(weekDates[0]);
+        const firstData = weeklyData[firstDate] || { students: [] };
+        const classStudents = getClassStudents(firstData.students, selectedClass);
+
+        if (classStudents.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8" class="loading">אין תלמידים בשיעור זה</td></tr>';
+            return;
+        }
+
+        tableBody.innerHTML = classStudents.map(student => {
+            let rowHtml = `<tr><td class="student-col">${student.name}</td>`;
+
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayData = weeklyData[dateStr] || { students: [] };
+                const studentData = dayData.students.find(s => s.id === student.id);
+                const status = studentData ? studentData.status : 'ממתין';
+
+                const statusClass = status === 'נוכח' ? 'present' : status === 'חסר' ? 'absent' : 'unmarked';
+                const symbol = status === 'נוכח' ? '✓' : status === 'חסר' ? '✗' : '';
+
+                rowHtml += `<td class="attendance-cell ${statusClass}" onclick="toggleAttendance(${student.id}, '${dateStr}', this)">${symbol}</td>`;
+            });
+
+            rowHtml += '</tr>';
+            return rowHtml;
+        }).join('');
+
+        updateStats();
+    }
+
+    function toggleAttendance(studentId, dateStr, cellElement) {
+        const dayData = weeklyData[dateStr];
+        if (!dayData) return;
+
+        const student = dayData.students.find(s => s.id === studentId);
+        if (!student) return;
+
+        let newStatus;
+        if (student.status === 'נוכח') {
+            newStatus = 0;
+        } else if (student.status === 'חסר') {
+            newStatus = null;
+        } else {
+            newStatus = 1;
+        }
+
+        markAttendance(studentId, dateStr, newStatus, cellElement);
+    }
+
+    function markAttendance(studentId, dateStr, status, cellElement) {
+        const statusText = status === 1 ? 'נוכח' : status === 0 ? 'חסר' : 'ממתין';
+
+        const dayData = weeklyData[dateStr];
+        const student = dayData.students.find(s => s.id === studentId);
+        if (student) {
+            student.status = statusText;
+        }
+
+        cellElement.className = 'attendance-cell';
+        if (status === 1) {
+            cellElement.textContent = '✓';
+            cellElement.classList.add('present');
+        } else if (status === 0) {
+            cellElement.textContent = '✗';
+            cellElement.classList.add('absent');
+        } else {
+            cellElement.textContent = '';
+            cellElement.classList.add('unmarked');
+        }
+
+        if (status !== null) {
+            fetch('/api/attendance/mark', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    date: dateStr,
+                    status: status
+                })
+            }).catch(error => console.error('Error:', error));
+        }
+
+        updateStats();
+    }
+
+    function previousWeek() {
+        weekStartDate.setDate(weekStartDate.getDate() - 7);
+        loadWeeklyAttendance();
+    }
+
+    function nextWeek() {
+        weekStartDate.setDate(weekStartDate.getDate() + 7);
+        loadWeeklyAttendance();
+    }
+
+    function goToThisWeek() {
+        weekStartDate = getStartOfWeek(new Date());
+        loadWeeklyAttendance();
+    }
+
+    function markAllPresent() {
+        const weekDates = getWeekDates(weekStartDate);
+        const firstDate = formatDate(weekDates[0]);
+        const firstData = weeklyData[firstDate] || { students: [] };
+        const classStudents = getClassStudents(firstData.students, selectedClass);
+
+        classStudents.forEach(student => {
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayData = weeklyData[dateStr];
+                if (dayData) {
+                    const s = dayData.students.find(st => st.id === student.id);
+                    if (s) {
+                        s.status = 'נוכח';
+                        fetch('/api/attendance/mark', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                student_id: student.id,
+                                date: dateStr,
+                                status: 1
+                            })
+                        });
+                    }
+                }
+            });
+        });
+
+        displayWeeklyTable();
+    }
+
+    function markAllAbsent() {
+        const weekDates = getWeekDates(weekStartDate);
+        const firstDate = formatDate(weekDates[0]);
+        const firstData = weeklyData[firstDate] || { students: [] };
+        const classStudents = getClassStudents(firstData.students, selectedClass);
+
+        classStudents.forEach(student => {
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayData = weeklyData[dateStr];
+                if (dayData) {
+                    const s = dayData.students.find(st => st.id === student.id);
+                    if (s) {
+                        s.status = 'חסר';
+                        fetch('/api/attendance/mark', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                student_id: student.id,
+                                date: dateStr,
+                                status: 0
+                            })
+                        });
+                    }
+                }
+            });
+        });
+
+        displayWeeklyTable();
+    }
+
+    function updateStats() {
+        const weekDates = getWeekDates(weekStartDate);
+        const firstDate = formatDate(weekDates[0]);
+        const firstData = weeklyData[firstDate] || { students: [] };
+        const classStudents = getClassStudents(firstData.students, selectedClass);
+
+        let totalPresent = 0, totalAbsent = 0, totalUnmarked = 0;
+
+        classStudents.forEach(student => {
+            weekDates.forEach(date => {
+                const dateStr = formatDate(date);
+                const dayData = weeklyData[dateStr] || { students: [] };
+                const studentData = dayData.students.find(s => s.id === student.id);
+                const status = studentData ? studentData.status : 'ממתין';
+
+                if (status === 'נוכח') totalPresent++;
+                else if (status === 'חסר') totalAbsent++;
+                else totalUnmarked++;
+            });
+        });
+
+        document.getElementById('presentCount').textContent = totalPresent;
+        document.getElementById('absentCount').textContent = totalAbsent;
+        document.getElementById('unmarkedCount').textContent = totalUnmarked;
+
+        const totalMarked = totalPresent + totalAbsent;
+        const percentage = totalMarked > 0 ? Math.round((totalPresent / totalMarked) * 100) : 0;
+        document.getElementById('percentCount').textContent = percentage + '%';
+
+        const allGrades = ['א', 'ב', 'ג'];
+        allGrades.forEach(grade => {
+            const gradeStudents = getClassStudents(firstData.students, grade);
+            document.getElementById(`count${grade}`).textContent = gradeStudents.length;
+        });
+    }
+
+    window.addEventListener('load', loadWeeklyAttendance);
+</script>
+
+<!-- Rapid Filling Script -->
+<script>
+    let rapidFillingDate = null;
+
+    function startRapidFilling() {
+        const dateStr = formatDate(new Date());
+        rapidFillingDate = dateStr;
+
+        fetch(`/api/rapid-filling/${dateStr}`)
+            .then(response => response.json())
+            .then(data => {
+                const dayData = weeklyData[dateStr] || {};
+                const studentsWithStatus = data.map(student => {
+                    const weekStudent = dayData.students ? dayData.students.find(s => s.id === student.id) : null;
+                    return {
+                        ...student,
+                        status: weekStudent ? weekStudent.status : 'ממתין'
+                    };
+                });
+
+                if (studentsWithStatus.length === 0) {
+                    alert('אין תלמידים להצגה');
+                    return;
+                }
+
+                displayRapidFillingByGrade(studentsWithStatus);
+                updateRapidStats(studentsWithStatus);
+                document.getElementById('rapidFillingModal').style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('שגיאה בטעינת תלמידים');
+            });
+    }
+
+    function displayRapidFillingByGrade(students) {
+        const grouped = {};
+        students.forEach(student => {
+            const grade = student.grade || 'ללא שיעור';
+            if (!grouped[grade]) {
+                grouped[grade] = [];
+            }
+            grouped[grade].push(student);
+        });
+
+        const sortedGrades = Object.keys(grouped).sort();
+
+        let html = '';
+        sortedGrades.forEach(grade => {
+            const gradeStudents = grouped[grade];
+            html += `
+                <div class="grade-section">
+                    <div class="grade-header">
+                        <span class="grade-name">שיעור ${grade}</span>
+                        <span class="grade-count">${gradeStudents.length} תלמידים</span>
+                    </div>
+                    <div class="grade-students">
+            `;
+
+            gradeStudents.forEach(student => {
+                const statusClass = student.status === 'נוכח' ? 'present' :
+                                  student.status === 'חסר' ? 'absent' : 'pending';
+                html += `
+                    <div class="rapid-student-row ${statusClass}">
+                        <span class="rapid-student-name">${student.name}</span>
+                        <div class="rapid-student-buttons">
+                            <button class="btn-rapid ${student.status === 'נוכח' ? 'active' : ''}"
+                                    onclick="markStudentRapid(${student.id}, 1, this)">
+                                ✓
+                            </button>
+                            <button class="btn-rapid absent ${student.status === 'חסר' ? 'active' : ''}"
+                                    onclick="markStudentRapid(${student.id}, 0, this)">
+                                ✗
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        document.getElementById('rapidFillingContainer').innerHTML = html;
+    }
+
+    function markStudentRapid(studentId, status, buttonElement) {
+        const statusText = status === 1 ? 'נוכח' : 'חסר';
+
+        const dayData = weeklyData[rapidFillingDate];
+        if (dayData && dayData.students) {
+            const student = dayData.students.find(s => s.id === studentId);
+            if (student) {
+                student.status = statusText;
+            }
+        }
+
+        const row = buttonElement.closest('.rapid-student-row');
+        row.className = 'rapid-student-row ' + (status === 1 ? 'present' : 'absent');
+
+        buttonElement.parentElement.querySelectorAll('.btn-rapid').forEach(btn => btn.classList.remove('active'));
+        buttonElement.classList.add('active');
+
+        const studentElements = document.querySelectorAll('.rapid-student-row');
+        let presentCount = 0, absentCount = 0, pendingCount = 0;
+        studentElements.forEach(el => {
+            if (el.classList.contains('present')) presentCount++;
+            else if (el.classList.contains('absent')) absentCount++;
+            else pendingCount++;
+        });
+
+        document.getElementById('rapidPresentCount').textContent = presentCount;
+        document.getElementById('rapidAbsentCount').textContent = absentCount;
+        document.getElementById('rapidUnmarkedCount').textContent = pendingCount;
+
+        fetch('/api/attendance/mark', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                student_id: studentId,
+                date: rapidFillingDate,
+                status: status
+            })
+        }).catch(error => {
+            console.error('Error saving attendance:', error);
+            alert('שגיאה בשמירת הנתונים לשרת - אך הנתונים מעודכנים בעמוד');
+        });
+    }
+
+    function updateRapidStats(students) {
+        const presentCount = students.filter(s => s.status === 'נוכח').length;
+        const absentCount = students.filter(s => s.status === 'חסר').length;
+        const unmarkedCount = students.filter(s => s.status === 'ממתין').length;
+
+        document.getElementById('rapidPresentCount').textContent = presentCount;
+        document.getElementById('rapidAbsentCount').textContent = absentCount;
+        document.getElementById('rapidUnmarkedCount').textContent = unmarkedCount;
+    }
+
+    function closeRapidFilling() {
+        document.getElementById('rapidFillingModal').style.display = 'none';
+    }
+</script>
+{% endblock %}

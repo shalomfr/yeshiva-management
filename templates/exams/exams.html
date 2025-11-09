@@ -1,0 +1,943 @@
+{% extends "base.html" %}
+
+{% block title %}ניהול מבחנים - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="exams-container">
+    <!-- Header with Quick Actions -->
+    <div class="page-header">
+        <div>
+            <h1>ניהול מבחנים</h1>
+            <p>יצירה, ניהול ומעקב אחר מבחנים</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="window.location.href='/exams/syllabi'">
+                <span>📚</span> ניהול סילבוסים
+            </button>
+            <button class="btn btn-secondary" onclick="window.location.href='/exams/scan'">
+                <span>📸</span> סריקת מבחנים
+            </button>
+            <button class="btn btn-primary" onclick="window.location.href='/exams/create'">
+                <span>➕</span> יצירת מבחן חדש
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">📝</div>
+            <div class="stat-details">
+                <div class="stat-label">מבחנים מתוכננים</div>
+                <div class="stat-value" id="scheduledCount">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-details">
+                <div class="stat-label">הושלמו החודש</div>
+                <div class="stat-value" id="completedCount">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-details">
+                <div class="stat-label">ממוצע ציונים</div>
+                <div class="stat-value" id="avgGrade">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-details">
+                <div class="stat-label">תלמידים בוחנו</div>
+                <div class="stat-value" id="studentsCount">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Selector & Filters -->
+    <div class="content-card">
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="segment" role="tablist">
+                    <button class="seg-btn active" data-view="list" onclick="switchView(this, 'list')">📋 רשימה</button>
+                    <button class="seg-btn" data-view="calendar" onclick="switchView(this, 'calendar')">📅 לוח שנה</button>
+                </div>
+            </div>
+            <div class="toolbar-right">
+                <div class="filter-group">
+                    <label>שיעור:</label>
+                    <select id="filterGrade" onchange="loadExams()">
+                        <option value="">הכל</option>
+                        <option value="א'">א'</option>
+                        <option value="ב'">ב'</option>
+                        <option value="ג'">ג'</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>מקצוע:</label>
+                    <select id="filterSubject" onchange="loadExams()">
+                        <option value="">הכל</option>
+                        <option value="עיון">עיון</option>
+                        <option value="בקיאות">בקיאות</option>
+                        <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                        <option value="חומש">חומש</option>
+                        <option value="הלכה">הלכה</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>סטטוס:</label>
+                    <select id="filterStatus" onchange="loadExams()">
+                        <option value="">הכל</option>
+                        <option value="draft">טיוטה</option>
+                        <option value="scheduled">מתוכנן</option>
+                        <option value="active">פעיל</option>
+                        <option value="completed">הושלם</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- List View -->
+        <div id="listView" class="view-content">
+            <div class="table-container">
+                <table class="exams-table">
+                    <thead>
+                        <tr>
+                            <th>שם המבחן</th>
+                            <th>מקצוע</th>
+                            <th>שיעור</th>
+                            <th>תאריך</th>
+                            <th>מספר תלמידים</th>
+                            <th>סטטוס</th>
+                            <th>פעולות</th>
+                        </tr>
+                    </thead>
+                    <tbody id="examsTableBody">
+                        <tr>
+                            <td colspan="7" class="empty-state">אין מבחנים להצגה</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Calendar View -->
+        <div id="calendarView" class="view-content" style="display: none;">
+            <div class="calendar-header">
+                <button class="btn-icon" onclick="changeMonth(-1)">◀</button>
+                <h3 id="calendarTitle">-</h3>
+                <button class="btn-icon" onclick="changeMonth(1)">▶</button>
+            </div>
+            <div id="calendar" class="calendar-grid">
+                <!-- Calendar will be generated here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Exam Details Modal (hidden by default) -->
+<div id="examModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">פרטי מבחן</h2>
+            <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+            <!-- Details will be loaded here -->
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">סגור</button>
+        </div>
+    </div>
+</div>
+
+<!-- PDF Download Modal -->
+<div id="pdfModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>הורדת PDF</h2>
+            <button class="modal-close" onclick="closePdfModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <p>בחר אפשרות הורדה:</p>
+            <div class="pdf-options">
+                <button class="btn btn-primary w-full" onclick="downloadAllPDFs()">
+                    <span>📦</span> הורד ZIP עם כל התלמידים
+                </button>
+                <div style="text-align: center; margin: 15px 0; color: #9ca3af;">או</div>
+                <div class="student-select-area">
+                    <label>בחר תלמיד ספציפי:</label>
+                    <select id="pdfStudentSelect" class="w-full">
+                        <option value="">טוען תלמידים...</option>
+                    </select>
+                    <button class="btn btn-secondary w-full" onclick="downloadSinglePDF()" style="margin-top: 10px;">
+                        <span>📄</span> הורד PDF בודד
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closePdfModal()">ביטול</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentView = 'list';
+let currentMonth = new Date();
+let currentExams = [];
+let currentExamForPDF = null;
+
+// Load exams on page load
+window.addEventListener('load', function() {
+    loadExams();
+    loadStats();
+});
+
+// Load exams from API
+function loadExams() {
+    const grade = document.getElementById('filterGrade').value;
+    const subject = document.getElementById('filterSubject').value;
+    const status = document.getElementById('filterStatus').value;
+
+    let url = '/api/exams?';
+    if (grade) url += `grade=${encodeURIComponent(grade)}&`;
+    if (subject) url += `subject=${encodeURIComponent(subject)}&`;
+    if (status) url += `status=${encodeURIComponent(status)}&`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(exams => {
+            currentExams = exams;
+            if (currentView === 'list') {
+                renderListView(exams);
+            } else {
+                renderCalendarView(exams);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('שגיאה בטעינת המבחנים');
+        });
+}
+
+// Render list view
+function renderListView(exams) {
+    const tbody = document.getElementById('examsTableBody');
+
+    if (!exams || exams.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">אין מבחנים להצגה</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = exams.map(exam => {
+        const statusText = getStatusText(exam.status);
+        const statusClass = `status-${exam.status}`;
+
+        return `
+            <tr onclick="viewExamDetails(${exam.id})">
+                <td><strong>${exam.title}</strong></td>
+                <td>${exam.subject}</td>
+                <td>${exam.grade}</td>
+                <td>${exam.scheduled_date || '-'}</td>
+                <td>${exam.students_count || 0}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td onclick="event.stopPropagation()">
+                    <button class="btn-icon" onclick="editExam(${exam.id})" title="ערוך">✏️</button>
+                    <button class="btn-icon" onclick="downloadPDF(${exam.id})" title="הורד PDF">📄</button>
+                    <button class="btn-icon" onclick="deleteExam(${exam.id})" title="מחק">🗑️</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Render calendar view
+function renderCalendarView(exams) {
+    const calendar = document.getElementById('calendar');
+    const title = document.getElementById('calendarTitle');
+
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+
+    title.textContent = currentMonth.toLocaleDateString('he-IL', { year: 'numeric', month: 'long' });
+
+    // Build calendar grid
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    let html = '<div class="calendar-weekdays">';
+    const weekdays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    weekdays.forEach(day => html += `<div>${day}</div>`);
+    html += '</div><div class="calendar-days">';
+
+    // Empty cells before first day
+    for (let i = 0; i < startingDayOfWeek; i++) {
+        html += '<div class="calendar-day empty"></div>';
+    }
+
+    // Days with exams
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayExams = exams.filter(e => e.scheduled_date === dateStr);
+
+        html += `<div class="calendar-day ${dayExams.length > 0 ? 'has-exams' : ''}">`;
+        html += `<div class="day-number">${day}</div>`;
+
+        if (dayExams.length > 0) {
+            html += '<div class="day-exams">';
+            dayExams.forEach(exam => {
+                html += `<div class="exam-badge" onclick="viewExamDetails(${exam.id})" title="${exam.title}">${exam.subject}</div>`;
+            });
+            html += '</div>';
+        }
+
+        html += '</div>';
+    }
+
+    html += '</div>';
+    calendar.innerHTML = html;
+}
+
+// Switch between views
+function switchView(button, view) {
+    document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    button.classList.add('active');
+
+    currentView = view;
+
+    document.getElementById('listView').style.display = view === 'list' ? 'block' : 'none';
+    document.getElementById('calendarView').style.display = view === 'calendar' ? 'block' : 'none';
+
+    if (view === 'calendar') {
+        renderCalendarView(currentExams);
+    }
+}
+
+// Change calendar month
+function changeMonth(delta) {
+    currentMonth.setMonth(currentMonth.getMonth() + delta);
+    renderCalendarView(currentExams);
+}
+
+// Get status text in Hebrew
+function getStatusText(status) {
+    const texts = {
+        'draft': 'טיוטה',
+        'scheduled': 'מתוכנן',
+        'active': 'פעיל',
+        'completed': 'הושלם'
+    };
+    return texts[status] || status;
+}
+
+// View exam details
+function viewExamDetails(examId) {
+    fetch(`/api/exams/${examId}`)
+        .then(r => r.json())
+        .then(exam => {
+            const modal = document.getElementById('examModal');
+            const body = document.getElementById('modalBody');
+
+            body.innerHTML = `
+                <div class="detail-row"><strong>שם:</strong> ${exam.title}</div>
+                <div class="detail-row"><strong>מקצוע:</strong> ${exam.subject}</div>
+                <div class="detail-row"><strong>שיעור:</strong> ${exam.grade}</div>
+                <div class="detail-row"><strong>תיאור:</strong> ${exam.description || '-'}</div>
+                <div class="detail-row"><strong>סילבוס:</strong> ${exam.syllabus_text || '-'}</div>
+                <div class="detail-row"><strong>נקודות:</strong> ${exam.total_points}</div>
+                <div class="detail-row"><strong>תאריך יצירה:</strong> ${exam.created_at}</div>
+                <div class="detail-row"><strong>סטטוס:</strong> ${getStatusText(exam.status)}</div>
+            `;
+
+            modal.style.display = 'flex';
+        })
+        .catch(err => {
+            console.error(err);
+            alert('שגיאה בטעינת פרטי המבחן');
+        });
+}
+
+// Close modal
+function closeModal() {
+    document.getElementById('examModal').style.display = 'none';
+}
+
+// Edit exam
+function editExam(examId) {
+    window.location.href = `/exams/create?id=${examId}`;
+}
+
+// Download PDF
+function downloadPDF(examId) {
+    currentExamForPDF = examId;
+
+    // Get exam details
+    const exam = currentExams.find(e => e.id === examId);
+    if (!exam) {
+        alert('מבחן לא נמצא');
+        return;
+    }
+
+    // Load students for this grade
+    fetch(`/api/students?grade=${encodeURIComponent(exam.grade)}`)
+        .then(r => r.json())
+        .then(students => {
+            const select = document.getElementById('pdfStudentSelect');
+            select.innerHTML = '<option value="">בחר תלמיד</option>' +
+                students.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+            // Open modal
+            document.getElementById('pdfModal').style.display = 'flex';
+        })
+        .catch(err => {
+            console.error(err);
+            alert('שגיאה בטעינת התלמידים');
+        });
+}
+
+// Close PDF modal
+function closePdfModal() {
+    document.getElementById('pdfModal').style.display = 'none';
+    currentExamForPDF = null;
+}
+
+// Download all PDFs as ZIP
+function downloadAllPDFs() {
+    if (!currentExamForPDF) return;
+
+    // Get all students for this exam's grade
+    const exam = currentExams.find(e => e.id === currentExamForPDF);
+
+    fetch(`/api/students?grade=${encodeURIComponent(exam.grade)}`)
+        .then(r => r.json())
+        .then(students => {
+            const studentIds = students.map(s => s.id);
+
+            // Call batch PDF API
+            fetch(`/api/exams/${currentExamForPDF}/pdf/batch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_ids: studentIds })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Download failed');
+                return response.blob();
+            })
+            .then(blob => {
+                // Download the ZIP file
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `exam_${currentExamForPDF}_all_students.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                closePdfModal();
+                alert('הקבצים הורדו בהצלחה!');
+            })
+            .catch(err => {
+                console.error(err);
+                alert('שגיאה בהורדת הקבצים');
+            });
+        });
+}
+
+// Download single PDF
+function downloadSinglePDF() {
+    const studentId = document.getElementById('pdfStudentSelect').value;
+
+    if (!studentId) {
+        alert('אנא בחר תלמיד');
+        return;
+    }
+
+    if (!currentExamForPDF) return;
+
+    // Download PDF for specific student
+    const url = `/api/exams/${currentExamForPDF}/pdf?student_id=${studentId}`;
+    window.open(url, '_blank');
+
+    closePdfModal();
+}
+
+// Delete exam
+function deleteExam(examId) {
+    if (!confirm('האם אתה בטוח שברצונך למחוק מבחן זה?')) {
+        return;
+    }
+
+    fetch(`/api/exams/${examId}`, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.error) {
+            alert('שגיאה: ' + result.error);
+            return;
+        }
+        alert('המבחן נמחק בהצלחה');
+        loadExams();
+    })
+    .catch(err => {
+        console.error(err);
+        alert('שגיאה במחיקת המבחן');
+    });
+}
+
+// Load statistics
+function loadStats() {
+    fetch('/api/exams/stats')
+        .then(r => r.json())
+        .then(stats => {
+            document.getElementById('scheduledCount').textContent = stats.scheduled || 0;
+            document.getElementById('completedCount').textContent = stats.completed || 0;
+            document.getElementById('avgGrade').textContent = stats.avg_grade ? stats.avg_grade.toFixed(1) : '-';
+            document.getElementById('studentsCount').textContent = stats.students_tested || 0;
+        })
+        .catch(err => console.error('Error loading stats:', err));
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const examModal = document.getElementById('examModal');
+    const pdfModal = document.getElementById('pdfModal');
+
+    if (event.target === examModal) {
+        closeModal();
+    }
+    if (event.target === pdfModal) {
+        closePdfModal();
+    }
+}
+</script>
+
+<style>
+.exams-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 30px;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.page-header h1 {
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1a1a1a;
+}
+
+.page-header p {
+    font-size: 16px;
+    color: #666;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.stat-icon {
+    font-size: 32px;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f9ff;
+    border-radius: 10px;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+/* Toolbar */
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.toolbar-left, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.segment {
+    display: flex;
+    background: white;
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.seg-btn {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.seg-btn.active {
+    background: #3b82f6;
+    color: white;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.filter-group select {
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+/* Content Card */
+.content-card {
+    background: white;
+    border-radius: 12px;
+    padding: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.view-content {
+    padding: 20px;
+}
+
+/* Table */
+.table-container {
+    overflow-x: auto;
+}
+
+.exams-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.exams-table thead {
+    background: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.exams-table th,
+.exams-table td {
+    padding: 12px;
+    text-align: right;
+    font-size: 14px;
+}
+
+.exams-table th {
+    font-weight: 600;
+    color: #374151;
+}
+
+.exams-table tbody tr {
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.exams-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-draft {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.status-scheduled {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status-active {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.status-completed {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+/* Calendar */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.calendar-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+    font-weight: 600;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 8px;
+    position: relative;
+}
+
+.calendar-day.empty {
+    border: none;
+}
+
+.calendar-day.has-exams {
+    background: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.day-number {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.day-exams {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.exam-badge {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6b7280;
+}
+
+.modal-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+.detail-row {
+    padding: 10px 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    margin: 0 2px;
+    transition: transform 0.2s;
+}
+
+.btn-icon:hover {
+    transform: scale(1.2);
+}
+
+.empty-state {
+    text-align: center;
+    color: #9ca3af;
+    padding: 40px !important;
+}
+
+/* PDF Modal Specific Styles */
+.pdf-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.student-select-area {
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.student-select-area label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 10px;
+    color: #374151;
+}
+
+.student-select-area select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+}
+
+.w-full {
+    width: 100%;
+}
+</style>
+{% endblock %}

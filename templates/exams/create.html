@@ -1,0 +1,995 @@
+{% extends "base.html" %}
+
+{% block title %}יצירת מבחן - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="exams-container">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1 id="pageTitle">יצירת מבחן חדש</h1>
+            <p>מלא את פרטי המבחן והוסף שאלות</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="window.location.href='/exams'">
+                <span>←</span> חזרה למבחנים
+            </button>
+        </div>
+    </div>
+
+    <!-- Multi-step Form -->
+    <div class="content-card">
+        <!-- Progress Steps -->
+        <div class="steps-progress">
+            <div class="step active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">פרטים כלליים</div>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">שאלות</div>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">תזמון והקצאה</div>
+            </div>
+            <div class="step" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-label">סיכום ופרסום</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Basic Details -->
+        <form id="examForm">
+            <div class="step-content" id="step1">
+                <h2 class="section-title">פרטים כלליים</h2>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>כותרת המבחן <span class="required">*</span></label>
+                        <div class="input">
+                            <input type="text" id="examTitle" required placeholder="לדוגמה: מבחן עיון - מסכת ברכות">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>מקצוע <span class="required">*</span></label>
+                        <div class="select">
+                            <select id="examSubject" required onchange="loadSubjectSyllabi()">
+                                <option value="">בחר מקצוע</option>
+                                <option value="עיון">עיון</option>
+                                <option value="בקיאות">בקיאות</option>
+                                <option value="גמרא עם רש\"י">גמרא עם רש"י</option>
+                                <option value="חומש">חומש</option>
+                                <option value="הלכה">הלכה</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>שיעור <span class="required">*</span></label>
+                        <div class="select">
+                            <select id="examGrade" required onchange="loadSubjectSyllabi()">
+                                <option value="">בחר שיעור</option>
+                                <option value="א'">א'</option>
+                                <option value="ב'">ב'</option>
+                                <option value="ג'">ג'</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>שנת לימודים</label>
+                        <div class="input">
+                            <input type="text" id="academicYear" placeholder="תשפ״ה" value="תשפ״ה">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>סמסטר</label>
+                        <div class="select">
+                            <select id="semester">
+                                <option value="">כל השנה</option>
+                                <option value="א'">סמסטר א'</option>
+                                <option value="ב'">סמסטר ב'</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>סך נקודות</label>
+                        <div class="input">
+                            <input type="number" id="totalPoints" value="100" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top: 20px;">
+                    <label>בחר סילבוס (אופציונלי)</label>
+                    <div class="select">
+                        <select id="existingSyllabus" onchange="loadSyllabusContent()">
+                            <option value="">בחר מהסילבוסים הקיימים או הזן ידנית</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>תיאור/חומר הלימוד</label>
+                    <div class="input">
+                        <textarea id="syllabusText" rows="3" placeholder="לדוגמה: מסכת ברכות דף ב' עד כ', עם רש״י ותוספות"></textarea>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>הערות נוספות</label>
+                    <div class="input">
+                        <textarea id="examDescription" rows="2" placeholder="הוראות, הבהרות או הערות למבחן"></textarea>
+                    </div>
+                </div>
+
+                <div class="step-actions">
+                    <button type="button" class="btn btn-primary" onclick="nextStep()">המשך →</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Questions -->
+            <div class="step-content" id="step2" style="display: none;">
+                <h2 class="section-title">הוספת שאלות</h2>
+
+                <div class="questions-toolbar">
+                    <button type="button" class="btn btn-secondary" onclick="addQuestion('open')">
+                        <span>➕</span> שאלה פתוחה
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="addQuestion('multiple_choice')">
+                        <span>➕</span> רב ברירה
+                    </button>
+                    <div class="points-summary">
+                        סה"כ נקודות: <strong id="currentPoints">0</strong> / <strong id="maxPoints">100</strong>
+                    </div>
+                </div>
+
+                <div id="questionsList" class="questions-list">
+                    <div class="empty-questions">
+                        <p>טרם נוספו שאלות</p>
+                        <p class="muted">לחץ על אחד הכפתורים למעלה להוספת שאלה</p>
+                    </div>
+                </div>
+
+                <div class="step-actions">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep()">← חזור</button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep()">המשך →</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Scheduling -->
+            <div class="step-content" id="step3" style="display: none;">
+                <h2 class="section-title">תזמון והקצאת תלמידים</h2>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>תאריך המבחן</label>
+                        <div class="input with-icon">
+                            <span class="icon">📅</span>
+                            <input type="text" id="scheduledDate" placeholder="DD/MM/YYYY">
+                        </div>
+                        <small class="muted">השאר ריק אם עדיין לא קבוע</small>
+                    </div>
+
+                    <div class="field">
+                        <label>שעת התחלה</label>
+                        <div class="input">
+                            <input type="time" id="scheduledTime">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label>משך זמן (דקות)</label>
+                        <div class="input">
+                            <input type="number" id="duration" placeholder="90" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field" style="margin-top: 20px;">
+                    <label>הקצאת תלמידים</label>
+                    <div class="students-selection">
+                        <div class="selection-options">
+                            <label class="radio-option">
+                                <input type="radio" name="studentSelection" value="all" checked onchange="toggleStudentsList()">
+                                <span>כל התלמידים בשיעור</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="studentSelection" value="selected" onchange="toggleStudentsList()">
+                                <span>בחירת תלמידים ספציפיים</span>
+                            </label>
+                        </div>
+
+                        <div id="studentsList" class="students-checkboxes" style="display: none;">
+                            <div class="search-box">
+                                <input type="text" id="studentsSearch" placeholder="חיפוש תלמיד..." oninput="filterStudents()">
+                            </div>
+                            <div id="studentsCheckboxes" class="checkbox-list">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-actions">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep()">← חזור</button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep()">המשך →</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Summary & Publish -->
+            <div class="step-content" id="step4" style="display: none;">
+                <h2 class="section-title">סיכום ופרסום</h2>
+
+                <div class="summary-card">
+                    <h3>סיכום המבחן</h3>
+                    <div id="examSummary" class="summary-content">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </div>
+
+                <div class="publish-options">
+                    <h3>אפשרויות פרסום</h3>
+                    <label class="radio-option">
+                        <input type="radio" name="publishStatus" value="draft" checked>
+                        <span>שמור כטיוטה</span>
+                        <small>המבחן לא יהיה זמין לתלמידים</small>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="publishStatus" value="scheduled">
+                        <span>מתוכנן</span>
+                        <small>המבחן יוצג כמתוכנן בתאריך שנבחר</small>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="publishStatus" value="active">
+                        <span>פרסם עכשיו</span>
+                        <small>המבחן יהיה זמין מיד להדפסה ומילוי</small>
+                    </label>
+                </div>
+
+                <div class="step-actions">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep()">← חזור</button>
+                    <button type="button" class="btn btn-success" onclick="saveExam()">💾 שמור מבחן</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let currentStep = 1;
+let questions = [];
+let questionCounter = 0;
+let editingExamId = null;
+
+// Load exam if editing
+window.addEventListener('load', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const examId = urlParams.get('id');
+
+    if (examId) {
+        editingExamId = examId;
+        document.getElementById('pageTitle').textContent = 'עריכת מבחן';
+        loadExam(examId);
+    }
+});
+
+// Navigate between steps
+function nextStep() {
+    if (!validateCurrentStep()) {
+        return;
+    }
+
+    document.getElementById(`step${currentStep}`).style.display = 'none';
+    document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
+    document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('completed');
+
+    currentStep++;
+
+    document.getElementById(`step${currentStep}`).style.display = 'block';
+    document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('active');
+
+    if (currentStep === 3) {
+        loadStudentsForGrade();
+    }
+
+    if (currentStep === 4) {
+        generateSummary();
+    }
+}
+
+function prevStep() {
+    document.getElementById(`step${currentStep}`).style.display = 'none';
+    document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
+
+    currentStep--;
+
+    document.getElementById(`step${currentStep}`).style.display = 'block';
+    document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('completed');
+    document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('active');
+}
+
+// Validate current step
+function validateCurrentStep() {
+    if (currentStep === 1) {
+        const title = document.getElementById('examTitle').value;
+        const subject = document.getElementById('examSubject').value;
+        const grade = document.getElementById('examGrade').value;
+
+        if (!title || !subject || !grade) {
+            alert('אנא מלא את כל השדות החובה');
+            return false;
+        }
+    } else if (currentStep === 2) {
+        if (questions.length === 0) {
+            alert('אנא הוסף לפחות שאלה אחת');
+            return false;
+        }
+
+        const totalPoints = calculateTotalPoints();
+        const maxPoints = parseInt(document.getElementById('totalPoints').value) || 100;
+
+        if (totalPoints !== maxPoints) {
+            if (!confirm(`סך הנקודות (${totalPoints}) שונה מהמקסימום המוגדר (${maxPoints}). להמשיך בכל זאת?`)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+// Load syllabi for selected subject and grade
+function loadSubjectSyllabi() {
+    const subject = document.getElementById('examSubject').value;
+    const grade = document.getElementById('examGrade').value;
+
+    if (!subject || !grade) return;
+
+    fetch(`/api/exams/syllabi?subject=${encodeURIComponent(subject)}&grade=${encodeURIComponent(grade)}`)
+        .then(r => r.json())
+        .then(data => {
+            const select = document.getElementById('existingSyllabus');
+            select.innerHTML = '<option value="">בחר מהסילבוסים הקיימים או הזן ידנית</option>';
+
+            if (data.syllabi && data.syllabi.length > 0) {
+                data.syllabi.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.id;
+                    option.textContent = `${s.syllabus_text} (${s.academic_year})`;
+                    option.dataset.content = s.syllabus_text;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(err => console.error('Error loading syllabi:', err));
+}
+
+// Load syllabus content
+function loadSyllabusContent() {
+    const select = document.getElementById('existingSyllabus');
+    const selectedOption = select.options[select.selectedIndex];
+
+    if (selectedOption.dataset.content) {
+        document.getElementById('syllabusText').value = selectedOption.dataset.content;
+    }
+}
+
+// Add question
+function addQuestion(type) {
+    questionCounter++;
+
+    const question = {
+        id: questionCounter,
+        type: type,
+        number: questions.length + 1,
+        text: '',
+        points: 10,
+        options: type === 'multiple_choice' ? ['', '', '', ''] : null,
+        correct_answer: ''
+    };
+
+    questions.push(question);
+    renderQuestions();
+}
+
+// Render questions
+function renderQuestions() {
+    const container = document.getElementById('questionsList');
+
+    if (questions.length === 0) {
+        container.innerHTML = `
+            <div class="empty-questions">
+                <p>טרם נוספו שאלות</p>
+                <p class="muted">לחץ על אחד הכפתורים למעלה להוספת שאלה</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = questions.map((q, index) => {
+        let optionsHTML = '';
+
+        if (q.type === 'multiple_choice') {
+            optionsHTML = `
+                <div class="question-options">
+                    ${q.options.map((opt, i) => `
+                        <div class="option-row">
+                            <input type="radio" name="correct_${q.id}" ${q.correct_answer == i ? 'checked' : ''}
+                                   onchange="updateCorrectAnswer(${q.id}, ${i})">
+                            <input type="text" placeholder="תשובה ${i + 1}" value="${opt}"
+                                   oninput="updateOption(${q.id}, ${i}, this.value)">
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        return `
+            <div class="question-card">
+                <div class="question-header">
+                    <div class="question-title">
+                        <strong>שאלה ${q.number}</strong>
+                        <span class="question-type">${q.type === 'open' ? 'פתוחה' : 'רב ברירה'}</span>
+                    </div>
+                    <div class="question-actions">
+                        <button type="button" class="btn-icon" onclick="deleteQuestion(${q.id})">🗑️</button>
+                    </div>
+                </div>
+                <div class="question-body">
+                    <textarea placeholder="נוסח השאלה..."
+                              oninput="updateQuestionText(${q.id}, this.value)">${q.text}</textarea>
+                    ${optionsHTML}
+                    <div class="question-points">
+                        <label>נקודות:</label>
+                        <input type="number" min="1" value="${q.points}"
+                               oninput="updateQuestionPoints(${q.id}, this.value)">
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    updatePointsSummary();
+}
+
+// Update question functions
+function updateQuestionText(id, text) {
+    const question = questions.find(q => q.id === id);
+    if (question) question.text = text;
+}
+
+function updateQuestionPoints(id, points) {
+    const question = questions.find(q => q.id === id);
+    if (question) {
+        question.points = parseInt(points) || 0;
+        updatePointsSummary();
+    }
+}
+
+function updateOption(questionId, optionIndex, value) {
+    const question = questions.find(q => q.id === questionId);
+    if (question && question.options) {
+        question.options[optionIndex] = value;
+    }
+}
+
+function updateCorrectAnswer(questionId, answerIndex) {
+    const question = questions.find(q => q.id === questionId);
+    if (question) {
+        question.correct_answer = answerIndex;
+    }
+}
+
+function deleteQuestion(id) {
+    if (!confirm('האם למחוק שאלה זו?')) return;
+
+    questions = questions.filter(q => q.id !== id);
+
+    // Renumber questions
+    questions.forEach((q, i) => q.number = i + 1);
+
+    renderQuestions();
+}
+
+// Calculate total points
+function calculateTotalPoints() {
+    return questions.reduce((sum, q) => sum + (q.points || 0), 0);
+}
+
+// Update points summary
+function updatePointsSummary() {
+    const total = calculateTotalPoints();
+    const max = parseInt(document.getElementById('totalPoints').value) || 100;
+
+    document.getElementById('currentPoints').textContent = total;
+    document.getElementById('maxPoints').textContent = max;
+}
+
+// Load students for selected grade
+function loadStudentsForGrade() {
+    const grade = document.getElementById('examGrade').value;
+
+    fetch(`/api/students?grade=${encodeURIComponent(grade)}`)
+        .then(r => r.json())
+        .then(students => {
+            const container = document.getElementById('studentsCheckboxes');
+            container.innerHTML = students.map(s => `
+                <label class="checkbox-label">
+                    <input type="checkbox" value="${s.id}" checked>
+                    <span>${s.name}</span>
+                </label>
+            `).join('');
+        })
+        .catch(err => console.error('Error loading students:', err));
+}
+
+// Toggle students list
+function toggleStudentsList() {
+    const selectedValue = document.querySelector('input[name="studentSelection"]:checked').value;
+    document.getElementById('studentsList').style.display = selectedValue === 'selected' ? 'block' : 'none';
+}
+
+// Filter students
+function filterStudents() {
+    const search = document.getElementById('studentsSearch').value.toLowerCase();
+    const labels = document.querySelectorAll('.checkbox-label');
+
+    labels.forEach(label => {
+        const text = label.textContent.toLowerCase();
+        label.style.display = text.includes(search) ? 'flex' : 'none';
+    });
+}
+
+// Generate summary
+function generateSummary() {
+    const title = document.getElementById('examTitle').value;
+    const subject = document.getElementById('examSubject').value;
+    const grade = document.getElementById('examGrade').value;
+    const syllabusText = document.getElementById('syllabusText').value;
+    const totalPoints = document.getElementById('totalPoints').value;
+    const scheduledDate = document.getElementById('scheduledDate').value;
+
+    const summary = `
+        <div class="summary-row"><strong>כותרת:</strong> ${title}</div>
+        <div class="summary-row"><strong>מקצוע:</strong> ${subject}</div>
+        <div class="summary-row"><strong>שיעור:</strong> ${grade}</div>
+        <div class="summary-row"><strong>חומר:</strong> ${syllabusText || '-'}</div>
+        <div class="summary-row"><strong>מספר שאלות:</strong> ${questions.length}</div>
+        <div class="summary-row"><strong>סך נקודות:</strong> ${totalPoints}</div>
+        <div class="summary-row"><strong>תאריך מתוכנן:</strong> ${scheduledDate || 'טרם נקבע'}</div>
+    `;
+
+    document.getElementById('examSummary').innerHTML = summary;
+}
+
+// Save exam
+function saveExam() {
+    const status = document.querySelector('input[name="publishStatus"]:checked').value;
+    const studentSelection = document.querySelector('input[name="studentSelection"]:checked').value;
+
+    let studentIds = [];
+    if (studentSelection === 'selected') {
+        const checkboxes = document.querySelectorAll('#studentsCheckboxes input[type="checkbox"]:checked');
+        studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    }
+
+    const examData = {
+        exam: {
+            title: document.getElementById('examTitle').value,
+            subject: document.getElementById('examSubject').value,
+            grade: document.getElementById('examGrade').value,
+            description: document.getElementById('examDescription').value,
+            syllabus_text: document.getElementById('syllabusText').value,
+            total_points: parseInt(document.getElementById('totalPoints').value),
+            academic_year: document.getElementById('academicYear').value,
+            semester: document.getElementById('semester').value,
+            status: status
+        },
+        questions: questions.map(q => ({
+            question_number: q.number,
+            question_text: q.text,
+            question_type: q.type,
+            points: q.points,
+            options: q.options ? JSON.stringify(q.options) : null,
+            correct_answer: q.correct_answer
+        })),
+        scheduled_date: document.getElementById('scheduledDate').value,
+        student_ids: studentIds
+    };
+
+    const url = editingExamId ? `/api/exams/${editingExamId}` : '/api/exams';
+    const method = editingExamId ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(examData)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.error) {
+            alert('שגיאה: ' + result.error);
+            return;
+        }
+
+        alert('המבחן נשמר בהצלחה!');
+        window.location.href = '/exams';
+    })
+    .catch(err => {
+        console.error(err);
+        alert('שגיאה בשמירת המבחן');
+    });
+}
+
+// Load exam for editing
+function loadExam(examId) {
+    fetch(`/api/exams/${examId}`)
+        .then(r => r.json())
+        .then(exam => {
+            document.getElementById('examTitle').value = exam.title;
+            document.getElementById('examSubject').value = exam.subject;
+            document.getElementById('examGrade').value = exam.grade;
+            document.getElementById('examDescription').value = exam.description || '';
+            document.getElementById('syllabusText').value = exam.syllabus_text || '';
+            document.getElementById('totalPoints').value = exam.total_points;
+            document.getElementById('academicYear').value = exam.academic_year || '';
+            document.getElementById('semester').value = exam.semester || '';
+
+            if (exam.questions && exam.questions.length > 0) {
+                questions = exam.questions.map(q => ({
+                    id: ++questionCounter,
+                    type: q.question_type,
+                    number: q.question_number,
+                    text: q.question_text,
+                    points: q.points,
+                    options: q.options ? JSON.parse(q.options) : null,
+                    correct_answer: q.correct_answer
+                }));
+                renderQuestions();
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('שגיאה בטעינת המבחן');
+        });
+}
+</script>
+
+<style>
+/* Progress Steps */
+.steps-progress {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 40px;
+    padding: 0 20px;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    flex: 1;
+}
+
+.step::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    right: 50%;
+    width: 100%;
+    height: 2px;
+    background: #e5e7eb;
+    z-index: -1;
+}
+
+.step:first-child::before {
+    display: none;
+}
+
+.step.completed .step-number {
+    background: #10b981;
+    color: white;
+}
+
+.step.completed::before {
+    background: #10b981;
+}
+
+.step.active .step-number {
+    background: #3b82f6;
+    color: white;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.step-label {
+    font-size: 14px;
+    color: #6b7280;
+    text-align: center;
+}
+
+/* Form Sections */
+.section-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 25px;
+    padding: 20px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.step-content {
+    padding: 0 20px 20px;
+}
+
+.step-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Questions */
+.questions-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.points-summary {
+    font-size: 16px;
+    color: #374151;
+}
+
+.questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.empty-questions {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.empty-questions p.muted {
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.question-card {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.question-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.question-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+}
+
+.question-type {
+    padding: 4px 12px;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.question-body textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    margin-bottom: 15px;
+}
+
+.question-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.option-row input[type="text"] {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.question-points {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.question-points label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.question-points input {
+    width: 80px;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+/* Students Selection */
+.students-selection {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.selection-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.radio-option {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.radio-option:has(input:checked) {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.radio-option input {
+    margin-left: 10px;
+}
+
+.radio-option small {
+    color: #6b7280;
+    font-size: 13px;
+    margin-right: 30px;
+}
+
+.students-checkboxes {
+    margin-top: 15px;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.checkbox-list {
+    max-height: 300px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.checkbox-label:hover {
+    background: #f9fafb;
+}
+
+/* Summary */
+.summary-card {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.summary-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.summary-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.summary-row {
+    padding: 10px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.summary-row:last-child {
+    border-bottom: none;
+}
+
+.publish-options {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.publish-options h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+/* Success Button */
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+</style>
+{% endblock %}

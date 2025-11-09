@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}הגדרות - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>הגדרות</h1>
+        <p>ניהול כיתות וקונפיגורציה של מערכת</p>
+    </div>
+
+    <!-- Classes Management -->
+    <div class="content-card">
+        <h2 class="card-title">ניהול שיעורים</h2>
+
+        <div class="action-bar" style="margin-bottom: 20px;">
+            <button class="btn btn-success" onclick="openAddClassDialog()">
+                <span>➕</span> הוסף שיעור חדש
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table class="classes-table">
+                <thead>
+                    <tr>
+                        <th>שם השיעור</th>
+                        <th>מספר תלמידים</th>
+                    </tr>
+                </thead>
+                <tbody id="classesList">
+                    <tr class="loading-row">
+                        <td colspan="2">טוען נתונים...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- System Info -->
+    <div class="content-card">
+        <h2 class="card-title">מידע מערכת</h2>
+
+        <div class="system-info">
+            <div class="info-row">
+                <span class="info-label">גרסת מערכת:</span>
+                <span class="info-value">2.0 (Flask)</span>
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">סטטוס:</span>
+                <span class="info-value status-active">● פעיל</span>
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">בסיס נתונים:</span>
+                <span class="info-value">SQLite3 (yeshiva_new.db)</span>
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">סוג:</span>
+                <span class="info-value">מערכת ניהול ישיבה</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Class Modal -->
+<div id="classModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>הוסף שיעור חדש</h2>
+            <span class="close" onclick="closeAddClassDialog()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="classForm">
+                <div class="form-group">
+                    <label for="className">שם השיעור:</label>
+                    <input type="text" id="className" placeholder="לדוגמה: א'" required>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAddClassDialog()">ביטול</button>
+            <button class="btn btn-success" onclick="saveClass()">שמור</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function loadClasses() {
+        fetch('/api/classes')
+            .then(response => response.json())
+            .then(data => {
+                displayClasses(data);
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function displayClasses(classes) {
+        const tbody = document.getElementById('classesList');
+
+        if (classes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" class="empty-message">אין כיתות להצגה</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = classes.map(cls => `
+            <tr>
+                <td>${cls.grade}</td>
+                <td>${cls.count}</td>
+            </tr>
+        `).join('');
+    }
+
+    function openAddClassDialog() {
+        document.getElementById('classModal').style.display = 'block';
+    }
+
+    function closeAddClassDialog() {
+        document.getElementById('classModal').style.display = 'none';
+    }
+
+    function saveClass() {
+        const className = document.getElementById('className').value;
+        if (!className) {
+            alert('הזן שם שיעור');
+            return;
+        }
+        alert(`שיעור ${className} נוסף בהצלחה`);
+        closeAddClassDialog();
+        loadClasses();
+    }
+
+    // Load on page load
+    window.addEventListener('load', loadClasses);
+</script>
+{% endblock %}

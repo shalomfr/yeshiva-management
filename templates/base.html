@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}מערכת ניהול ישיבה{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation (Right side for RTL) -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="app-title">ישיבה</h1>
+                <p class="app-subtitle">מערכת ניהול</p>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="/" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">לוח בקרה</span>
+                </a>
+                <a href="/students" class="nav-item {% if request.endpoint == 'students' %}active{% endif %}">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-text">תלמידים</span>
+                </a>
+                <a href="/attendance" class="nav-item {% if request.endpoint == 'attendance' %}active{% endif %}">
+                    <span class="nav-icon">✓</span>
+                    <span class="nav-text">נוכחות</span>
+                </a>
+                <a href="/exams" class="nav-item {% if request.endpoint == 'exams' or request.endpoint == 'exams_syllabi' or request.endpoint == 'exams_create' %}active{% endif %}">
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-text">מבחנים</span>
+                </a>
+                <a href="/reports" class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-text">דוחות</span>
+                </a>
+                <a href="/settings" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">הגדרות</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="version-info">
+                    <p>גרסה 2.0</p>
+                    <p class="status">● פעיל</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

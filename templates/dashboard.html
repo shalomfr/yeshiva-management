@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}לוח בקרה - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1>לוח בקרה ראשי</h1>
+            <p class="date-info">{{ stats.hebrew_date }} | {{ stats.today }}</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards Row -->
+    <div class="stats-row">
+        <!-- Card 1: Present -->
+        <div class="stat-card card-success">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value">{{ stats.present }}</div>
+                <div class="card-label">נוכחים היום</div>
+            </div>
+        </div>
+
+        <!-- Card 2: Absent -->
+        <div class="stat-card card-danger">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value">{{ stats.absent }}</div>
+                <div class="card-label">חסרים היום</div>
+            </div>
+        </div>
+
+        <!-- Card 3: Percentage -->
+        <div class="stat-card card-info">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value">{{ stats.percent }}%</div>
+                <div class="card-label">אחוז נוכחות</div>
+            </div>
+        </div>
+
+        <!-- Card 4: Total Students -->
+        <div class="stat-card card-warning">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value">{{ stats.total }}</div>
+                <div class="card-label">תלמידים פעילים</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Section -->
+    <div class="content-card">
+        <h2 class="card-title">נוכחות שבועית</h2>
+        <div class="chart-container">
+            <div class="chart-bars">
+                <div class="bar-item">
+                    <div class="bar-percent">95%</div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="height: 95%"></div>
+                    </div>
+                    <div class="bar-label">א'</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-percent">92%</div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="height: 92%"></div>
+                    </div>
+                    <div class="bar-label">ב'</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-percent">88%</div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="height: 88%"></div>
+                    </div>
+                    <div class="bar-label">ג'</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-percent">90%</div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="height: 90%"></div>
+                    </div>
+                    <div class="bar-label">ד'</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-percent">87%</div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="height: 87%"></div>
+                    </div>
+                    <div class="bar-label">ה'</div>
+                </div>
+                <div class="bar-item">
+                    <div class="bar-percent">85%</div>
+                    <div class="bar-background">
+                        <div class="bar-fill" style="height: 85%"></div>
+                    </div>
+                    <div class="bar-label">ו'</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activities Section -->
+    <div class="content-card">
+        <h2 class="card-title">פעילויות אחרונות</h2>
+        <div class="activities-list">
+            <p class="empty-message">אין פעילויות אחרונות</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
