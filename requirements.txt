@@ -2,9 +2,7 @@
 Flask==3.0.0
 Flask-CORS==4.0.0
 Werkzeug==3.0.1
-
-# Database
-sqlite3  # Built-in with Python
+gunicorn==21.2.0
 
 # PDF Generation
 reportlab==4.0.7
@@ -14,18 +12,11 @@ python-bidi==0.4.2
 # QR Code & Barcode
 qrcode==7.4.2
 python-barcode==0.15.1
-pyzbar==0.1.9
 Pillow==10.1.0
 
-# OCR & Image Processing
-pytesseract==0.3.10
-opencv-python==4.8.1.78
+# Image Processing
 numpy==1.26.2
 PyMuPDF==1.23.8
-
-# Optional: zxing-cpp for better QR/barcode detection
-# Uncomment to install (requires C++ compiler)
-# zxing-cpp==2.2.0
 
 # Excel Support
 openpyxl==3.1.2
@@ -34,11 +25,3 @@ xlrd==2.0.1
 # Utilities
 python-dateutil==2.8.2
 pyluach==2.2.0
-
-# PDF Generation from HTML
-# Note: weasyprint requires GTK+ libraries on Windows
-# If PDF generation doesn't work, the system will fall back to HTML print
-weasyprint==60.1
-
-
-

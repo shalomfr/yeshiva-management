@@ -4,7 +4,8 @@
       "Bash(start http://127.0.0.1:5000/)",
       "Bash(start:*)",
       "Bash(curl:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nעדכון מערכת דוחות תלמידים וממשק המשתמש\n\n- הוספת עמוד דוח תלמיד חדש עם אפשרות הדפסה\n- שיפור סגנונות CSS כולל קובץ הדפסה ייעודי\n- עדכון תבניות HTML לתמיכה בתכנים חדשים\n- עדכוני מסד נתונים והתאמות שירותים\n\n🤖 Generated with Claude Code\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

@@ -36,9 +36,25 @@ lpt2
 
 # Database
 *.db-journal
+*.db
 
 # Logs
 *.log
 
 # Test files
 test_*.pdf
+
+# Backups
+backups/
+
+# Temp files
+temp/
+
+# Uploads
+uploads/
+
+# Local settings
+.claude/
+
+# Archive
+archive/

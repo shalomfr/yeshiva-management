@@ -24,7 +24,11 @@ def get_application_path():
 
 
 def get_data_path(filename):
-    """קבלת נתיב מלא לקובץ נתונים"""
+    """קבלת נתיב מלא לקובץ נתונים - תומך ב-Render disk"""
+    # בדיקה אם יש תיקיית נתונים חיצונית (Render)
+    data_dir = os.environ.get('DATA_DIR', '')
+    if data_dir and os.path.exists(data_dir):
+        return os.path.join(data_dir, filename)
     return os.path.join(get_application_path(), filename)
 
 
