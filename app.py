@@ -4,12 +4,14 @@ Flask Application - Yeshiva Management System
 מערכת Flask - מערכת ניהול ישיבה
 """
 
-from flask import Flask, render_template, request, jsonify, send_file, make_response
+from flask import Flask, render_template, request, jsonify, send_file, make_response, session, redirect, url_for
 from datetime import datetime, timedelta
 from pyluach import dates
 from services.database import YeshivaDatabase, ExamDatabase
+from functools import wraps
 import json
 import os
+import hashlib
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -17,6 +19,10 @@ app.config['JSON_AS_ASCII'] = False  # Support Hebrew characters in JSON
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 app.config['TESSERACT_PATH'] = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'yeshiva-secret-key-2024-change-in-production')
+
+# Default admin password (change this!)
+ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get('ADMIN_PASSWORD', 'yeshiva123').encode()).hexdigest()
 
 # Create upload folder if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -24,10 +30,45 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 db = YeshivaDatabase()
 exam_db = ExamDatabase()
 
+# ==================== AUTHENTICATION ====================
+
+def login_required(f):
+    """דקורטור לבדיקת התחברות"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """דף התחברות"""
+    error = None
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        if password_hash == ADMIN_PASSWORD_HASH:
+            session['logged_in'] = True
+            session['login_time'] = datetime.now().isoformat()
+            return redirect(url_for('dashboard'))
+        else:
+            error = 'סיסמה שגויה'
+    
+    return render_template('login.html', error=error, current_year=datetime.now().year)
+
+@app.route('/logout')
+def logout():
+    """התנתקות"""
+    session.clear()
+    return redirect(url_for('login'))
+
 # ==================== PAGES ====================
 
 @app.route('/')
 @app.route('/dashboard')
+@login_required
 def dashboard():
     """לוח בקרה - Dashboard"""
     today = datetime.now().date()
@@ -58,16 +99,19 @@ def dashboard():
     return render_template('dashboard.html', stats=stats)
 
 @app.route('/students')
+@login_required
 def students():
     """ניהול תלמידים - Students Management"""
     return render_template('students.html')
 
 @app.route('/attendance')
+@login_required
 def attendance():
     """סימון נוכחות - Attendance"""
     return render_template('attendance.html')
 
 @app.route('/reports')
+@login_required
 def reports():
     """דוחות - Reports"""
     return render_template('reports.html')
@@ -78,6 +122,7 @@ def demo_report():
     return render_template('demo_report.html')
 
 @app.route('/settings')
+@login_required
 def settings():
     """הגדרות - Settings"""
     return render_template('settings.html')
@@ -486,6 +531,7 @@ def api_date_gregorian():
 
 @app.route('/student-report')
 @app.route('/student-report/<int:student_id>')
+@login_required
 def student_report_page(student_id=None):
     """עמוד הפקת דוח פרטי לתלמיד"""
     return render_template('student_report.html', student_id=student_id)
@@ -757,24 +803,34 @@ def api_add_students_bulk():
 # ==================== EXAMS ROUTES ====================
 
 @app.route('/exams')
+@login_required
 def exams():
     """דף ניהול מבחנים"""
     return render_template('exams/exams.html')
 
 @app.route('/exams/syllabi')
+@login_required
 def exams_syllabi():
     """דף ניהול הספקים"""
     return render_template('exams/syllabi.html')
 
 @app.route('/exams/create')
+@login_required
 def exams_create():
     """דף יצירת מבחן"""
     return render_template('exams/create.html')
 
 @app.route('/exams/scan')
+@login_required
 def exams_scan():
     """דף סריקת מבחנים"""
     return render_template('exams/scan.html')
+
+@app.route('/exams/grades')
+@login_required
+def exams_grades():
+    """דף הזנת ציונים - תצוגת מטריצה"""
+    return render_template('exams/grades.html')
 
 # ==================== EXAMS API ====================
 
@@ -981,6 +1037,35 @@ def api_save_grade():
             notes=data.get('notes')
         )
         return jsonify({'success': True, 'grade_id': grade_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/exams/grades/matrix')
+def api_grades_matrix():
+    """מטריצת ציונים - שורות=תלמידים, עמודות=מבחנים"""
+    try:
+        grade = request.args.get('grade')
+        subject = request.args.get('subject')
+        matrix = exam_db.get_grades_matrix(grade=grade, subject=subject)
+        return jsonify(matrix)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/exams/grades/direct', methods=['POST'])
+def api_save_grade_direct():
+    """שמירת ציון ישירה לפי student_id ו-exam_id"""
+    data = request.json
+    try:
+        result = exam_db.save_grade_direct(
+            student_id=data.get('student_id'),
+            exam_id=data.get('exam_id'),
+            score=data.get('score'),
+            graded_by=data.get('graded_by', 'מערכת')
+        )
+        if result:
+            return jsonify({'success': True, **result})
+        else:
+            return jsonify({'success': False, 'error': 'מבחן לא נמצא'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1296,6 +1381,57 @@ def api_scan_save():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ==================== DEVELOPER FEEDBACK ====================
+
+@app.route('/feedback')
+@login_required
+def feedback_page():
+    """דף משוב למתכנת"""
+    return render_template('feedback.html')
+
+@app.route('/api/feedback', methods=['GET', 'POST'])
+@login_required
+def api_feedback():
+    """API למשוב"""
+    if request.method == 'POST':
+        data = request.json
+        try:
+            feedback_id = db.add_feedback(
+                category=data.get('category', 'כללי'),
+                title=data.get('title', ''),
+                description=data.get('description', ''),
+                priority=data.get('priority', 'רגיל')
+            )
+            return jsonify({'success': True, 'id': feedback_id})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    else:
+        status = request.args.get('status')
+        feedback_list = db.get_all_feedback(status=status)
+        return jsonify(feedback_list)
+
+@app.route('/api/feedback/<int:feedback_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_feedback_item(feedback_id):
+    """API לעדכון/מחיקת משוב"""
+    if request.method == 'DELETE':
+        try:
+            db.delete_feedback(feedback_id)
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    else:  # PUT
+        data = request.json
+        try:
+            db.update_feedback_status(
+                feedback_id=feedback_id,
+                status=data.get('status'),
+                notes=data.get('notes')
+            )
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 # ==================== FAVICON ====================
 

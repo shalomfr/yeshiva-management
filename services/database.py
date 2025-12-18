@@ -405,6 +405,21 @@ class YeshivaDatabase:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_syllabi_grade ON subject_syllabi(grade, subject)')
 
+        # טבלת משוב למתכנת
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS developer_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                priority TEXT DEFAULT 'רגיל',
+                status TEXT DEFAULT 'חדש',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMP,
+                notes TEXT
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -974,6 +989,70 @@ class YeshivaDatabase:
 
         return results
 
+    # ===== Developer Feedback =====
+
+    def add_feedback(self, category, title, description, priority='רגיל'):
+        """הוספת משוב חדש למתכנת"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO developer_feedback (category, title, description, priority)
+            VALUES (?, ?, ?, ?)
+        ''', (category, title, description, priority))
+
+        feedback_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return feedback_id
+
+    def get_all_feedback(self, status=None):
+        """קבלת כל המשובים"""
+        conn = sqlite3.connect(self.db_name)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if status:
+            cursor.execute('''
+                SELECT * FROM developer_feedback WHERE status = ? ORDER BY created_at DESC
+            ''', (status,))
+        else:
+            cursor.execute('''
+                SELECT * FROM developer_feedback ORDER BY 
+                    CASE status WHEN 'חדש' THEN 1 WHEN 'בטיפול' THEN 2 ELSE 3 END,
+                    CASE priority WHEN 'דחוף' THEN 1 WHEN 'גבוה' THEN 2 WHEN 'רגיל' THEN 3 ELSE 4 END,
+                    created_at DESC
+            ''')
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def update_feedback_status(self, feedback_id, status, notes=None):
+        """עדכון סטטוס משוב"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+
+        if status == 'טופל':
+            cursor.execute('''
+                UPDATE developer_feedback SET status = ?, notes = ?, resolved_at = ? WHERE id = ?
+            ''', (status, notes, datetime.now(), feedback_id))
+        else:
+            cursor.execute('''
+                UPDATE developer_feedback SET status = ?, notes = ? WHERE id = ?
+            ''', (status, notes, feedback_id))
+
+        conn.commit()
+        conn.close()
+
+    def delete_feedback(self, feedback_id):
+        """מחיקת משוב"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM developer_feedback WHERE id = ?', (feedback_id,))
+        conn.commit()
+        conn.close()
+
 # ===== Exam Management Database Operations =====
 
 class ExamDatabase(YeshivaDatabase):
@@ -1317,3 +1396,137 @@ class ExamDatabase(YeshivaDatabase):
         results = cursor.fetchall()
         conn.close()
         return results
+
+    def get_grades_matrix(self, grade=None, subject=None):
+        """קבלת מטריצת ציונים - שורות=תלמידים, עמודות=מבחנים"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+
+        # קבלת מבחנים לפי פילטרים
+        exam_query = 'SELECT id, title, subject, total_points FROM exams WHERE status != "draft"'
+        exam_params = []
+        if grade:
+            exam_query += ' AND grade = ?'
+            exam_params.append(grade)
+        if subject:
+            exam_query += ' AND subject = ?'
+            exam_params.append(subject)
+        exam_query += ' ORDER BY created_at DESC LIMIT 10'
+
+        cursor.execute(exam_query, exam_params)
+        exams = cursor.fetchall()
+
+        # קבלת תלמידים לפי כיתה
+        student_query = 'SELECT id, first_name, last_name, current_grade FROM students WHERE status = "פעיל"'
+        student_params = []
+        if grade:
+            student_query += ' AND current_grade = ?'
+            student_params.append(grade)
+        student_query += ' ORDER BY last_name, first_name'
+
+        cursor.execute(student_query, student_params)
+        students = cursor.fetchall()
+
+        # בניית מטריצת ציונים
+        matrix = []
+        for student in students:
+            student_id, first_name, last_name, current_grade = student
+            student_row = {
+                'id': student_id,
+                'name': f"{first_name} {last_name}",
+                'grade': current_grade,
+                'exams': {}
+            }
+
+            for exam in exams:
+                exam_id = exam[0]
+                # חיפוש ציון
+                cursor.execute('''
+                    SELECT se.id, eg.total_score, eg.grade_percent
+                    FROM student_exams se
+                    LEFT JOIN exam_grades eg ON eg.student_exam_id = se.id
+                    WHERE se.student_id = ? AND se.exam_id = ?
+                ''', (student_id, exam_id))
+
+                result = cursor.fetchone()
+                if result:
+                    student_row['exams'][exam_id] = {
+                        'student_exam_id': result[0],
+                        'score': result[1],
+                        'percent': result[2]
+                    }
+                else:
+                    student_row['exams'][exam_id] = None
+
+            matrix.append(student_row)
+
+        conn.close()
+
+        return {
+            'exams': [{'id': e[0], 'title': e[1], 'subject': e[2], 'total_points': e[3]} for e in exams],
+            'students': matrix
+        }
+
+    def save_grade_direct(self, student_id, exam_id, score, graded_by='מערכת'):
+        """שמירת ציון ישירה - יוצר student_exam אם לא קיים"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+
+        # קבלת total_points של המבחן
+        cursor.execute('SELECT total_points FROM exams WHERE id = ?', (exam_id,))
+        exam = cursor.fetchone()
+        if not exam:
+            conn.close()
+            return None
+
+        total_points = exam[0]
+        grade_percent = (score / total_points * 100) if total_points > 0 else 0
+
+        # בדיקה אם קיים student_exam
+        cursor.execute('''
+            SELECT id FROM student_exams WHERE student_id = ? AND exam_id = ?
+        ''', (student_id, exam_id))
+
+        result = cursor.fetchone()
+        if result:
+            student_exam_id = result[0]
+        else:
+            # יצירת student_exam חדש
+            cursor.execute('''
+                INSERT INTO student_exams (student_id, exam_id, status, scheduled_date)
+                VALUES (?, ?, 'graded', ?)
+            ''', (student_id, exam_id, datetime.now().date()))
+            student_exam_id = cursor.lastrowid
+
+        # בדיקה אם יש כבר ציון - עדכון או הוספה
+        cursor.execute('SELECT id FROM exam_grades WHERE student_exam_id = ?', (student_exam_id,))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute('''
+                UPDATE exam_grades
+                SET total_score = ?, grade_percent = ?, graded_by = ?, graded_at = ?
+                WHERE student_exam_id = ?
+            ''', (score, grade_percent, graded_by, datetime.now(), student_exam_id))
+            grade_id = existing[0]
+        else:
+            cursor.execute('''
+                INSERT INTO exam_grades (student_exam_id, total_score, grade_percent, graded_by, grading_method, graded_at)
+                VALUES (?, ?, ?, ?, 'manual', ?)
+            ''', (student_exam_id, score, grade_percent, graded_by, datetime.now()))
+            grade_id = cursor.lastrowid
+
+        # עדכון סטטוס
+        cursor.execute('''
+            UPDATE student_exams SET status = 'graded', actual_date = ? WHERE id = ?
+        ''', (datetime.now().date(), student_exam_id))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            'grade_id': grade_id,
+            'student_exam_id': student_exam_id,
+            'score': score,
+            'percent': grade_percent
+        }

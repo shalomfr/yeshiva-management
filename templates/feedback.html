@@ -1,0 +1,692 @@
+{% extends "base.html" %}
+
+{% block title %}משוב למתכנת - מערכת ניהול ישיבה{% endblock %}
+
+{% block content %}
+<div class="feedback-container">
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1>💬 משוב למתכנת</h1>
+            <p>שלח הערות, בקשות שיפור או דיווחי באגים</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-primary" onclick="openNewFeedbackModal()">
+                <span>➕</span> הוספת משוב חדש
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card card-info">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="newCount">0</div>
+                <div class="card-label">חדשים</div>
+            </div>
+        </div>
+        <div class="stat-card card-warning">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="inProgressCount">0</div>
+                <div class="card-label">בטיפול</div>
+            </div>
+        </div>
+        <div class="stat-card card-success">
+            <div class="card-border"></div>
+            <div class="card-content">
+                <div class="card-value" id="resolvedCount">0</div>
+                <div class="card-label">טופלו</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="filter-tabs">
+        <button class="filter-tab active" data-status="" onclick="filterByStatus('')">הכל</button>
+        <button class="filter-tab" data-status="חדש" onclick="filterByStatus('חדש')">חדשים</button>
+        <button class="filter-tab" data-status="בטיפול" onclick="filterByStatus('בטיפול')">בטיפול</button>
+        <button class="filter-tab" data-status="טופל" onclick="filterByStatus('טופל')">טופלו</button>
+    </div>
+
+    <!-- Feedback List -->
+    <div class="feedback-list" id="feedbackList">
+        <div class="loading">טוען משובים...</div>
+    </div>
+</div>
+
+<!-- New Feedback Modal -->
+<div id="newFeedbackModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>➕ הוספת משוב חדש</h2>
+            <span class="close" onclick="closeNewFeedbackModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>קטגוריה</label>
+                <select id="feedbackCategory">
+                    <option value="באג">🐛 באג / תקלה</option>
+                    <option value="שיפור">✨ בקשת שיפור</option>
+                    <option value="תכונה חדשה">🆕 תכונה חדשה</option>
+                    <option value="עיצוב">🎨 עיצוב</option>
+                    <option value="כללי">💬 כללי</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>עדיפות</label>
+                <div class="priority-selector">
+                    <button type="button" class="priority-btn" data-priority="נמוך" onclick="selectPriority('נמוך')">נמוך</button>
+                    <button type="button" class="priority-btn active" data-priority="רגיל" onclick="selectPriority('רגיל')">רגיל</button>
+                    <button type="button" class="priority-btn" data-priority="גבוה" onclick="selectPriority('גבוה')">גבוה</button>
+                    <button type="button" class="priority-btn urgent" data-priority="דחוף" onclick="selectPriority('דחוף')">דחוף 🔥</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>כותרת</label>
+                <input type="text" id="feedbackTitle" placeholder="תאר בקצרה את הנושא">
+            </div>
+            <div class="form-group">
+                <label>תיאור מפורט</label>
+                <textarea id="feedbackDescription" rows="5" placeholder="תאר את הבעיה או הבקשה בפירוט..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeNewFeedbackModal()">ביטול</button>
+            <button class="btn btn-primary" onclick="submitFeedback()">שלח משוב</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilter = '';
+let selectedPriority = 'רגיל';
+
+window.addEventListener('load', () => {
+    loadFeedback();
+});
+
+function loadFeedback() {
+    let url = '/api/feedback';
+    if (currentFilter) {
+        url += `?status=${encodeURIComponent(currentFilter)}`;
+    }
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            renderFeedbackList(data);
+            updateStats(data);
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            document.getElementById('feedbackList').innerHTML = '<div class="error">שגיאה בטעינת המשובים</div>';
+        });
+}
+
+function renderFeedbackList(feedbackList) {
+    const container = document.getElementById('feedbackList');
+
+    if (!feedbackList || feedbackList.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <div class="empty-text">אין משובים להצגה</div>
+                <button class="btn btn-primary" onclick="openNewFeedbackModal()">הוסף משוב ראשון</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = feedbackList.map(item => {
+        const categoryIcon = getCategoryIcon(item.category);
+        const priorityClass = getPriorityClass(item.priority);
+        const statusClass = getStatusClass(item.status);
+        const date = new Date(item.created_at).toLocaleDateString('he-IL');
+
+        return `
+            <div class="feedback-card ${statusClass}">
+                <div class="feedback-header">
+                    <span class="feedback-category">${categoryIcon} ${item.category}</span>
+                    <span class="feedback-priority ${priorityClass}">${item.priority}</span>
+                    <span class="feedback-status">${item.status}</span>
+                    <span class="feedback-date">${date}</span>
+                </div>
+                <div class="feedback-title">${item.title}</div>
+                <div class="feedback-description">${item.description}</div>
+                ${item.notes ? `<div class="feedback-notes"><strong>הערות:</strong> ${item.notes}</div>` : ''}
+                <div class="feedback-actions">
+                    ${item.status !== 'טופל' ? `
+                        <button class="btn-small btn-success" onclick="markAsResolved(${item.id})">✓ סמן כטופל</button>
+                    ` : ''}
+                    <button class="btn-small btn-danger" onclick="deleteFeedback(${item.id})">🗑️ מחק</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateStats(feedbackList) {
+    const newCount = feedbackList.filter(f => f.status === 'חדש').length;
+    const inProgressCount = feedbackList.filter(f => f.status === 'בטיפול').length;
+    const resolvedCount = feedbackList.filter(f => f.status === 'טופל').length;
+
+    document.getElementById('newCount').textContent = newCount;
+    document.getElementById('inProgressCount').textContent = inProgressCount;
+    document.getElementById('resolvedCount').textContent = resolvedCount;
+}
+
+function getCategoryIcon(category) {
+    const icons = {
+        'באג': '🐛',
+        'שיפור': '✨',
+        'תכונה חדשה': '🆕',
+        'עיצוב': '🎨',
+        'כללי': '💬'
+    };
+    return icons[category] || '💬';
+}
+
+function getPriorityClass(priority) {
+    const classes = {
+        'דחוף': 'priority-urgent',
+        'גבוה': 'priority-high',
+        'רגיל': 'priority-normal',
+        'נמוך': 'priority-low'
+    };
+    return classes[priority] || 'priority-normal';
+}
+
+function getStatusClass(status) {
+    const classes = {
+        'חדש': 'status-new',
+        'בטיפול': 'status-in-progress',
+        'טופל': 'status-resolved'
+    };
+    return classes[status] || '';
+}
+
+function filterByStatus(status) {
+    currentFilter = status;
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.getAttribute('data-status') === status) {
+            tab.classList.add('active');
+        }
+    });
+    loadFeedback();
+}
+
+function openNewFeedbackModal() {
+    document.getElementById('feedbackTitle').value = '';
+    document.getElementById('feedbackDescription').value = '';
+    document.getElementById('feedbackCategory').value = 'באג';
+    selectPriority('רגיל');
+    document.getElementById('newFeedbackModal').style.display = 'block';
+}
+
+function closeNewFeedbackModal() {
+    document.getElementById('newFeedbackModal').style.display = 'none';
+}
+
+function selectPriority(priority) {
+    selectedPriority = priority;
+    document.querySelectorAll('.priority-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-priority') === priority) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function submitFeedback() {
+    const category = document.getElementById('feedbackCategory').value;
+    const title = document.getElementById('feedbackTitle').value.trim();
+    const description = document.getElementById('feedbackDescription').value.trim();
+
+    if (!title) {
+        alert('אנא הזן כותרת');
+        return;
+    }
+
+    if (!description) {
+        alert('אנא הזן תיאור');
+        return;
+    }
+
+    fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            category,
+            title,
+            description,
+            priority: selectedPriority
+        })
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            closeNewFeedbackModal();
+            loadFeedback();
+            alert('המשוב נשלח בהצלחה! 🎉');
+        } else {
+            alert('שגיאה: ' + result.error);
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        alert('שגיאה בשליחת המשוב');
+    });
+}
+
+function markAsResolved(feedbackId) {
+    const notes = prompt('הערות (אופציונלי):');
+    
+    fetch(`/api/feedback/${feedbackId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            status: 'טופל',
+            notes: notes || ''
+        })
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            loadFeedback();
+        } else {
+            alert('שגיאה: ' + result.error);
+        }
+    });
+}
+
+function deleteFeedback(feedbackId) {
+    if (!confirm('האם למחוק משוב זה?')) return;
+
+    fetch(`/api/feedback/${feedbackId}`, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            loadFeedback();
+        } else {
+            alert('שגיאה: ' + result.error);
+        }
+    });
+}
+
+// Close modal on outside click
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+};
+</script>
+
+<style>
+.feedback-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.page-header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.page-header p {
+    color: #666;
+    font-size: 14px;
+}
+
+/* Stats */
+.stats-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    flex: 1;
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.card-border {
+    position: absolute;
+    right: 0;
+    top: 10%;
+    bottom: 10%;
+    width: 4px;
+    border-radius: 2px;
+}
+
+.card-success .card-border { background: #22c55e; }
+.card-warning .card-border { background: #f59e0b; }
+.card-info .card-border { background: #3b82f6; }
+
+.card-content {
+    text-align: center;
+}
+
+.card-value {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.card-label {
+    font-size: 13px;
+    color: #666;
+}
+
+/* Filter Tabs */
+.filter-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.filter-tab {
+    padding: 10px 20px;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.filter-tab:hover {
+    border-color: #3b82f6;
+}
+
+.filter-tab.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+/* Feedback List */
+.feedback-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.feedback-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border-right: 4px solid #e5e7eb;
+}
+
+.feedback-card.status-new {
+    border-right-color: #3b82f6;
+}
+
+.feedback-card.status-in-progress {
+    border-right-color: #f59e0b;
+}
+
+.feedback-card.status-resolved {
+    border-right-color: #22c55e;
+    opacity: 0.7;
+}
+
+.feedback-header {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.feedback-category {
+    background: #f3f4f6;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.feedback-priority {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.priority-urgent { background: #fee2e2; color: #b91c1c; }
+.priority-high { background: #fef3c7; color: #b45309; }
+.priority-normal { background: #dbeafe; color: #1e40af; }
+.priority-low { background: #f3f4f6; color: #6b7280; }
+
+.feedback-status {
+    background: #e5e7eb;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.feedback-date {
+    color: #9ca3af;
+    font-size: 12px;
+    margin-right: auto;
+}
+
+.feedback-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.feedback-description {
+    color: #4b5563;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+}
+
+.feedback-notes {
+    background: #f9fafb;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.feedback-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-success { background: #dcfce7; color: #15803d; }
+.btn-danger { background: #fee2e2; color: #b91c1c; }
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: white;
+    border-radius: 12px;
+}
+
+.empty-icon {
+    font-size: 60px;
+    margin-bottom: 15px;
+}
+
+.empty-text {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 550px;
+    width: 90%;
+    margin: 50px auto;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+    font-size: 20px;
+}
+
+.close {
+    font-size: 28px;
+    cursor: pointer;
+    color: #9ca3af;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* Form */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #374151;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.form-group textarea {
+    resize: vertical;
+}
+
+.priority-selector {
+    display: flex;
+    gap: 8px;
+}
+
+.priority-btn {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.priority-btn:hover {
+    border-color: #3b82f6;
+}
+
+.priority-btn.active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+
+.priority-btn.urgent.active {
+    border-color: #ef4444;
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.loading, .error {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+}
+
+.error { color: #ef4444; }
+</style>
+{% endblock %}
+
+
+
+

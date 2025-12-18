@@ -57,3 +57,11 @@ uploads/
 
 # Archive
 archive/
+
+# Large files
+*.psd
+*.mhtml
+*.jpg
+*.png
+!static/**/*.png
+!static/**/*.jpg
