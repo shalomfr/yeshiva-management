@@ -913,6 +913,202 @@ class YeshivaDatabase:
         
         return weeks
 
+    # ===== Dashboard Methods =====
+
+    def get_weekly_attendance_by_day(self):
+        """קבלת אחוזי נוכחות לפי ימים בשבוע הנוכחי"""
+        from datetime import date, timedelta
+        from pyluach import dates
+        
+        today = date.today()
+        # מציאת יום ראשון של השבוע (בישראל)
+        days_since_sunday = (today.weekday() + 1) % 7
+        week_start = today - timedelta(days=days_since_sunday)
+        
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # קבלת מספר התלמידים הפעילים
+        cursor.execute("SELECT COUNT(*) FROM students WHERE status = 'פעיל'")
+        total_students = cursor.fetchone()[0]
+        
+        if total_students == 0:
+            conn.close()
+            return []
+        
+        days_hebrew = ['א', 'ב', 'ג', 'ד', 'ה', 'ו']
+        result = []
+        
+        for i in range(6):  # ראשון עד שישי
+            day = week_start + timedelta(days=i)
+            if day > today:
+                result.append({'day': days_hebrew[i], 'percent': 0, 'is_future': True})
+                continue
+            
+            # קבלת נוכחות ליום זה
+            heb_date = dates.HebrewDate.from_pydate(day)
+            date_hebrew = heb_date.hebrew_date_string()
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM attendance 
+                WHERE date_hebrew = ? AND status = 'נוכח'
+            ''', (date_hebrew,))
+            present_count = cursor.fetchone()[0]
+            
+            percent = int((present_count / total_students) * 100) if total_students > 0 else 0
+            result.append({'day': days_hebrew[i], 'percent': percent, 'is_future': False})
+        
+        conn.close()
+        return result
+
+    def get_low_attendance_students(self, threshold=80, days=30):
+        """קבלת תלמידים עם נוכחות נמוכה"""
+        from datetime import date, timedelta
+        
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+        
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # קבלת כל התלמידים הפעילים
+        cursor.execute("SELECT id, first_name, last_name, current_grade FROM students WHERE status = 'פעיל'")
+        students = cursor.fetchall()
+        
+        low_attendance = []
+        
+        for student in students:
+            student_id, first_name, last_name, grade = student
+            
+            # ספירת נוכחות
+            cursor.execute('''
+                SELECT status, COUNT(*) as count
+                FROM attendance
+                WHERE student_id = ? 
+                    AND date_gregorian BETWEEN ? AND ?
+                GROUP BY status
+            ''', (student_id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+            
+            results = cursor.fetchall()
+            present = 0
+            total = 0
+            
+            for status, count in results:
+                total += count
+                if status == 'נוכח':
+                    present = count
+            
+            if total > 0:
+                percent = int((present / total) * 100)
+                if percent < threshold:
+                    low_attendance.append({
+                        'id': student_id,
+                        'name': f"{first_name} {last_name}",
+                        'grade': grade,
+                        'percent': percent,
+                        'present': present,
+                        'total': total
+                    })
+        
+        conn.close()
+        # מיון לפי אחוז נוכחות (הנמוך ביותר קודם)
+        low_attendance.sort(key=lambda x: x['percent'])
+        return low_attendance[:10]  # מחזיר עד 10 תלמידים
+
+    def get_upcoming_exams(self, days=7):
+        """קבלת מבחנים קרובים"""
+        from datetime import date, timedelta
+        
+        today = date.today()
+        end_date = today + timedelta(days=days)
+        
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, title, subject, grade, scheduled_date, status
+            FROM exams
+            WHERE scheduled_date BETWEEN ? AND ?
+                AND status != 'draft'
+            ORDER BY scheduled_date ASC
+            LIMIT 10
+        ''', (today.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        exams = []
+        for row in results:
+            exams.append({
+                'id': row[0],
+                'title': row[1],
+                'subject': row[2],
+                'grade': row[3],
+                'date': row[4],
+                'status': row[5]
+            })
+        
+        return exams
+
+    def log_activity(self, action_type, description, user_id=None, related_id=None):
+        """רישום פעילות במערכת"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # יצירת טבלת פעילויות אם לא קיימת
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_type TEXT NOT NULL,
+                description TEXT NOT NULL,
+                user_id INTEGER,
+                related_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT INTO activity_log (action_type, description, user_id, related_id)
+            VALUES (?, ?, ?, ?)
+        ''', (action_type, description, user_id, related_id))
+        
+        conn.commit()
+        conn.close()
+
+    def get_recent_activities(self, limit=10):
+        """קבלת פעילויות אחרונות"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # בדיקה אם הטבלה קיימת
+        cursor.execute('''
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='activity_log'
+        ''')
+        if not cursor.fetchone():
+            conn.close()
+            return []
+        
+        cursor.execute('''
+            SELECT action_type, description, created_at
+            FROM activity_log
+            ORDER BY created_at DESC
+            LIMIT ?
+        ''', (limit,))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        activities = []
+        for row in results:
+            activities.append({
+                'type': row[0],
+                'description': row[1],
+                'time': row[2]
+            })
+        
+        return activities
+
     def get_all_sessions(self):
         """קבלת כל הסשנים (תפילות + סדרי לימוד)
 

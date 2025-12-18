@@ -14,16 +14,198 @@
         html {
             overflow-y: scroll; /* Always show scrollbar */
         }
+        
+        /* Global Search Styles */
+        .search-trigger {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            margin: 10px 15px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .search-trigger:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+        
+        .search-trigger .shortcut {
+            margin-right: auto;
+            font-size: 11px;
+            padding: 2px 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+        
+        /* Search Modal */
+        .search-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            padding: 10vh 20px;
+        }
+        
+        .search-modal.active {
+            display: block;
+        }
+        
+        .search-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .search-header {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            gap: 12px;
+        }
+        
+        .search-icon {
+            font-size: 20px;
+            color: #9ca3af;
+        }
+        
+        .search-input {
+            flex: 1;
+            border: none;
+            font-size: 18px;
+            outline: none;
+            background: transparent;
+        }
+        
+        .search-close {
+            padding: 5px 10px;
+            background: #f3f4f6;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .search-section {
+            padding: 10px 0;
+        }
+        
+        .search-section-title {
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #9ca3af;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .search-result-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        
+        .search-result-item:hover,
+        .search-result-item.selected {
+            background: #f3f4ff;
+        }
+        
+        .result-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f0f0f0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .result-info {
+            flex: 1;
+        }
+        
+        .result-title {
+            font-weight: 500;
+            color: #1a1a1a;
+        }
+        
+        .result-meta {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        
+        .search-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: #9ca3af;
+        }
+        
+        .search-footer {
+            padding: 12px 20px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        
+        .search-footer kbd {
+            padding: 2px 6px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            font-family: inherit;
+        }
     </style>
 </head>
 <body>
+    <!-- Mobile Hamburger Button -->
+    <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMobileMenu()">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    
+    <!-- Mobile Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileMenu()"></div>
+    
     <div class="app-container">
         <!-- Sidebar Navigation (Right side for RTL) -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <h1 class="app-title">ישיבה</h1>
                 <p class="app-subtitle">מערכת ניהול</p>
             </div>
+            
+            <!-- Search Trigger -->
+            <button class="search-trigger" onclick="openSearch()">
+                <span>🔍</span>
+                <span>חיפוש...</span>
+                <span class="shortcut">Ctrl+K</span>
+            </button>
 
             <nav class="nav-menu">
                 <a href="/" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
@@ -78,7 +260,211 @@
         </main>
     </div>
 
+    <!-- Global Search Modal -->
+    <div id="searchModal" class="search-modal" onclick="if(event.target === this) closeSearch()">
+        <div class="search-container">
+            <div class="search-header">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="search-input" placeholder="חפש תלמידים, מבחנים, דפים..." autocomplete="off">
+                <button class="search-close" onclick="closeSearch()">ESC</button>
+            </div>
+            <div class="search-results" id="searchResults">
+                <div class="search-empty">הקלד כדי לחפש...</div>
+            </div>
+            <div class="search-footer">
+                <span><kbd>↑</kbd> <kbd>↓</kbd> לניווט</span>
+                <span><kbd>Enter</kbd> לבחירה</span>
+                <span><kbd>Esc</kbd> לסגירה</span>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- Mobile Menu Script -->
+    <script>
+        function toggleMobileMenu() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const hamburger = document.getElementById('hamburgerBtn');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+            hamburger.classList.toggle('active');
+        }
+        
+        // Close menu when clicking nav item on mobile
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    toggleMobileMenu();
+                }
+            });
+        });
+    </script>
+    
+    <!-- Global Search Script -->
+    <script>
+        let searchTimeout = null;
+        let selectedIndex = -1;
+        let searchResults = [];
+        
+        // Quick links for pages
+        const quickLinks = [
+            { type: 'page', title: 'לוח בקרה', url: '/', icon: '📊' },
+            { type: 'page', title: 'תלמידים', url: '/students', icon: '👥' },
+            { type: 'page', title: 'נוכחות', url: '/attendance', icon: '✓' },
+            { type: 'page', title: 'נוכחות שבועית', url: '/attendance/weekly', icon: '📅' },
+            { type: 'page', title: 'מבחנים', url: '/exams', icon: '📝' },
+            { type: 'page', title: 'יצירת מבחן', url: '/exams/create', icon: '➕' },
+            { type: 'page', title: 'סילבוסים', url: '/exams/syllabi', icon: '📚' },
+            { type: 'page', title: 'הזנת ציונים', url: '/exams/grades', icon: '💯' },
+            { type: 'page', title: 'דוחות', url: '/reports', icon: '📊' },
+            { type: 'page', title: 'דוח תלמיד', url: '/student-report', icon: '📋' },
+            { type: 'page', title: 'הגדרות', url: '/settings', icon: '⚙️' },
+            { type: 'page', title: 'משוב למתכנת', url: '/feedback', icon: '💬' }
+        ];
+        
+        function openSearch() {
+            document.getElementById('searchModal').classList.add('active');
+            document.getElementById('searchInput').focus();
+            selectedIndex = -1;
+        }
+        
+        function closeSearch() {
+            document.getElementById('searchModal').classList.remove('active');
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').innerHTML = '<div class="search-empty">הקלד כדי לחפש...</div>';
+        }
+        
+        // Keyboard shortcut
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+K to open search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                openSearch();
+            }
+            
+            // Escape to close
+            if (e.key === 'Escape') {
+                closeSearch();
+            }
+            
+            // Arrow navigation
+            if (document.getElementById('searchModal').classList.contains('active')) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    navigateResults(1);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    navigateResults(-1);
+                } else if (e.key === 'Enter' && selectedIndex >= 0) {
+                    e.preventDefault();
+                    selectResult(selectedIndex);
+                }
+            }
+        });
+        
+        function navigateResults(direction) {
+            const items = document.querySelectorAll('.search-result-item');
+            if (items.length === 0) return;
+            
+            selectedIndex += direction;
+            if (selectedIndex < 0) selectedIndex = items.length - 1;
+            if (selectedIndex >= items.length) selectedIndex = 0;
+            
+            items.forEach((item, i) => {
+                item.classList.toggle('selected', i === selectedIndex);
+            });
+            
+            items[selectedIndex].scrollIntoView({ block: 'nearest' });
+        }
+        
+        function selectResult(index) {
+            if (searchResults[index]) {
+                window.location.href = searchResults[index].url;
+            }
+        }
+        
+        // Search input handler
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            
+            if (searchTimeout) clearTimeout(searchTimeout);
+            
+            if (query.length === 0) {
+                document.getElementById('searchResults').innerHTML = '<div class="search-empty">הקלד כדי לחפש...</div>';
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => performSearch(query), 200);
+        });
+        
+        async function performSearch(query) {
+            searchResults = [];
+            selectedIndex = -1;
+            
+            // Filter quick links
+            const matchingPages = quickLinks.filter(link => 
+                link.title.includes(query)
+            );
+            
+            // Search students via API
+            let students = [];
+            try {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                students = data.students || [];
+            } catch (e) {
+                console.error('Search error:', e);
+            }
+            
+            // Build results HTML
+            let html = '';
+            
+            if (matchingPages.length > 0) {
+                html += '<div class="search-section">';
+                html += '<div class="search-section-title">דפים</div>';
+                matchingPages.forEach((page, i) => {
+                    searchResults.push({ type: 'page', url: page.url });
+                    html += `
+                        <div class="search-result-item" onclick="window.location.href='${page.url}'">
+                            <div class="result-icon">${page.icon}</div>
+                            <div class="result-info">
+                                <div class="result-title">${page.title}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (students.length > 0) {
+                html += '<div class="search-section">';
+                html += '<div class="search-section-title">תלמידים</div>';
+                students.forEach((student, i) => {
+                    searchResults.push({ type: 'student', url: `/students?id=${student.id}` });
+                    html += `
+                        <div class="search-result-item" onclick="window.location.href='/students?id=${student.id}'">
+                            <div class="result-icon">👤</div>
+                            <div class="result-info">
+                                <div class="result-title">${student.first_name} ${student.last_name}</div>
+                                <div class="result-meta">שיעור ${student.grade || 'לא צוין'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (html === '') {
+                html = '<div class="search-empty">לא נמצאו תוצאות</div>';
+            }
+            
+            document.getElementById('searchResults').innerHTML = html;
+        }
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>

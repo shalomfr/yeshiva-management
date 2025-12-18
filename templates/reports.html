@@ -6,11 +6,11 @@
 <div class="reports-container">
     <!-- Header -->
     <div class="page-header">
-        <h1>דוחות נוכחות</h1>
-        <p>צפייה ויצוא של דוחות נוכחות</p>
+        <h1>📊 דוחות נוכחות</h1>
+        <p>צפייה ויצוא של דוחות נוכחות עם גרפים אינטראקטיביים</p>
     </div>
 
-    <!-- Toolbar + Filters (מעוצב בסגנון החדש) -->
+    <!-- Toolbar + Filters -->
     <div class="reports-toolbar">
         <div class="toolbar-left">
             <div class="segment" role="tablist" aria-label="טווחי זמן">
@@ -21,8 +21,7 @@
             </div>
         </div>
         <div class="toolbar-right">
-            <button onclick="window.location.href='/student-report'" style="background: #4A90E2; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">📋 דוח תלמיד פרטי</button>
-            <button class="ghost" onclick="toggleScheduled()">דוחות מתוזמנים ▾</button>
+            <button onclick="window.location.href='/student-report'" class="btn-link">📋 דוח תלמיד פרטי</button>
             <button class="ghost" onclick="exportVisibleExcel()">ייצוא כפי שמוצג</button>
             <button class="primary" onclick="exportToCSV()">ייצוא דוח</button>
         </div>
@@ -57,11 +56,6 @@
                         <option value="א'">א'</option>
                         <option value="ב'">ב'</option>
                         <option value="ג'">ג'</option>
-                        <option value="ד'">ד'</option>
-                        <option value="ה'">ה'</option>
-                        <option value="ו'">ו'</option>
-                        <option value="ז'">ז'</option>
-                        <option value="ח'">ח'</option>
                     </select>
                 </div>
                 <small>&nbsp;</small>
@@ -74,7 +68,34 @@
         </div>
     </div>
 
-    <!-- Results -->
+    <!-- Charts Section -->
+    <div class="charts-grid">
+        <!-- Attendance Distribution Pie Chart -->
+        <div class="content-card chart-card">
+            <h3 class="card-title">התפלגות נוכחות</h3>
+            <div class="chart-wrapper">
+                <canvas id="attendancePieChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Attendance by Grade Bar Chart -->
+        <div class="content-card chart-card">
+            <h3 class="card-title">נוכחות לפי שיעור</h3>
+            <div class="chart-wrapper">
+                <canvas id="gradeBarChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Trend Line Chart -->
+        <div class="content-card chart-card chart-wide">
+            <h3 class="card-title">מגמת נוכחות לאורך זמן</h3>
+            <div class="chart-wrapper-wide">
+                <canvas id="trendLineChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
     <div class="content-card">
         <h2 class="card-title">תוצאות הדוח</h2>
 
@@ -92,7 +113,7 @@
                 </thead>
                 <tbody id="reportsBody">
                     <tr>
-                        <td colspan="6" class="empty-state">אין נתונים להצגה עבור ההגדרות הנוכחיות</td>
+                        <td colspan="6" class="empty-state">לחץ "הצג תוצאות" לטעינת הדוח</td>
                     </tr>
                 </tbody>
                 <tfoot id="reportsFooter"></tfoot>
@@ -101,16 +122,207 @@
     </div>
 </div>
 
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.chart-card {
+    padding: 20px;
+}
+
+.chart-wide {
+    grid-column: span 2;
+}
+
+.chart-wrapper {
+    height: 250px;
+    position: relative;
+}
+
+.chart-wrapper-wide {
+    height: 300px;
+    position: relative;
+}
+
+.btn-link {
+    background: #4A90E2;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+    .chart-wide {
+        grid-column: span 1;
+    }
+}
+</style>
+
 <script>
+    // Chart instances
+    let pieChart = null;
+    let barChart = null;
+    let lineChart = null;
+    
     // State management
-    let isHebrewMode = true; // כברירת מחדל - תאריכים עבריים
+    let isHebrewMode = true;
     let startDateGregorian = '';
     let endDateGregorian = '';
+    let reportData = null;
 
-    // Set today's date as default
     window.addEventListener('load', function() {
         initializeDates();
+        initializeCharts();
     });
+
+    function initializeCharts() {
+        // Pie Chart - Attendance Distribution
+        const pieCtx = document.getElementById('attendancePieChart').getContext('2d');
+        pieChart = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['נוכח', 'חסר', 'איחור'],
+                datasets: [{
+                    data: [0, 0, 0],
+                    backgroundColor: ['#22c55e', '#ef4444', '#f59e0b'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        rtl: true,
+                        labels: { font: { size: 12 } }
+                    }
+                }
+            }
+        });
+
+        // Bar Chart - By Grade
+        const barCtx = document.getElementById('gradeBarChart').getContext('2d');
+        barChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ["א'", "ב'", "ג'"],
+                datasets: [{
+                    label: 'אחוז נוכחות',
+                    data: [0, 0, 0],
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { callback: v => v + '%' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // Line Chart - Trend
+        const lineCtx = document.getElementById('trendLineChart').getContext('2d');
+        lineChart = new Chart(lineCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'אחוז נוכחות',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { callback: v => v + '%' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    function updateCharts(data) {
+        if (!data || !data.rows) return;
+
+        // Calculate totals
+        let totalPresent = 0;
+        let totalAbsent = 0;
+        let totalLate = 0;
+
+        const gradeData = {};
+
+        data.rows.forEach(row => {
+            totalPresent += Number(row.present) || 0;
+            totalAbsent += Number(row.absent) || 0;
+            totalLate += Number(row.late) || 0;
+
+            // Group by grade
+            const grade = row.grade || 'לא ידוע';
+            if (!gradeData[grade]) {
+                gradeData[grade] = { present: 0, total: 0 };
+            }
+            gradeData[grade].present += Number(row.present) || 0;
+            gradeData[grade].total += (Number(row.present) || 0) + (Number(row.absent) || 0);
+        });
+
+        // Update Pie Chart
+        pieChart.data.datasets[0].data = [totalPresent, totalAbsent, totalLate];
+        pieChart.update();
+
+        // Update Bar Chart
+        const grades = ["א'", "ב'", "ג'"];
+        const gradePercents = grades.map(g => {
+            if (gradeData[g] && gradeData[g].total > 0) {
+                return Math.round((gradeData[g].present / gradeData[g].total) * 100);
+            }
+            return 0;
+        });
+        barChart.data.datasets[0].data = gradePercents;
+        barChart.update();
+
+        // Update Line Chart with daily trend (if available)
+        if (data.daily_trend) {
+            lineChart.data.labels = data.daily_trend.map(d => d.date);
+            lineChart.data.datasets[0].data = data.daily_trend.map(d => d.percent);
+            lineChart.update();
+        }
+    }
 
     function initializeDates() {
         const today = new Date();
@@ -121,7 +333,6 @@
         
         endDateGregorian = gregorianDate;
         
-        // חישוב תאריך התחלה - לפני 30 יום
         const startDate = new Date(today);
         startDate.setDate(startDate.getDate() - 30);
         const startYear = startDate.getFullYear();
@@ -129,7 +340,6 @@
         const startDay = String(startDate.getDate()).padStart(2, '0');
         startDateGregorian = `${startDay}/${startMonth}/${startYear}`;
         
-        // המרה לעברי
         convertToHebrew(startDateGregorian, 'start');
         convertToHebrew(gregorianDate, 'end');
     }
@@ -144,7 +354,6 @@
             label.textContent = 'מתאריך (עברי)';
             document.getElementById('startDate').placeholder = 'א׳ בשבט תשפ"ה';
             document.getElementById('endDate').placeholder = 'א׳ בשבט תשפ"ה';
-            // המרה חזרה לעברי
             if (startDateGregorian) convertToHebrew(startDateGregorian, 'start');
             if (endDateGregorian) convertToHebrew(endDateGregorian, 'end');
         } else {
@@ -152,7 +361,6 @@
             label.textContent = 'מתאריך (לועזי)';
             document.getElementById('startDate').placeholder = 'DD/MM/YYYY';
             document.getElementById('endDate').placeholder = 'DD/MM/YYYY';
-            // הצגת התאריכים הלועזיים
             document.getElementById('startDate').value = startDateGregorian;
             document.getElementById('endDate').value = endDateGregorian;
             document.getElementById('startConverted').textContent = '';
@@ -177,7 +385,6 @@
         if (!value) return;
         
         if (isHebrewMode) {
-            // המרה מעברי ללועזי
             fetch(`/api/date/gregorian?hebrew_date=${encodeURIComponent(value)}`)
                 .then(r => r.json())
                 .then(d => {
@@ -192,7 +399,6 @@
                 })
                 .catch(err => console.error('Error converting date:', err));
         } else {
-            // שמירת התאריך הלועזי
             if (field === 'start') {
                 startDateGregorian = value;
             } else {
@@ -216,12 +422,16 @@
                     alert('שגיאה: ' + data.error);
                     return;
                 }
+                
+                reportData = data;
+                
                 const body = document.getElementById('reportsBody');
                 if (!data.rows || data.rows.length === 0) {
                     body.innerHTML = `<tr><td colspan="6" class="empty-state">אין נתונים לטווח שנבחר</td></tr>`;
                     document.getElementById('reportsFooter').innerHTML = '';
                     return;
                 }
+                
                 body.innerHTML = data.rows.map(r => `
                     <tr>
                         <td>${r.name}</td>
@@ -229,7 +439,7 @@
                         <td>${r.id_number || ''}</td>
                         <td>${r.present}</td>
                         <td>${r.absent}</td>
-                        <td>${r.percent}%</td>
+                        <td><span class="percent-badge ${r.percent < 60 ? 'danger' : r.percent < 80 ? 'warning' : 'success'}">${r.percent}%</span></td>
                     </tr>
                 `).join('');
 
@@ -253,6 +463,9 @@
                         <th>${avgPercent}%</th>
                     </tr>
                 `;
+                
+                // Update charts
+                updateCharts(data);
             })
             .catch(err => {
                 console.error(err);
@@ -276,7 +489,6 @@
                     return;
                 }
 
-                // Create a blob from the CSV data
                 const blob = new Blob([data.csv], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
                 const url = URL.createObjectURL(blob);
@@ -297,7 +509,6 @@
             });
     }
 
-    // Preset range helpers
     function applyPreset(button) {
         document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
         button.classList.add('active');
@@ -315,7 +526,7 @@
         if (type === 'week') {
             const first = new Date(today);
             const day = first.getDay();
-            first.setDate(first.getDate() - day); // ראשון
+            first.setDate(first.getDate() - day);
             start = first;
         } else if (type === 'month') {
             start = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -323,7 +534,6 @@
             const qStartMonth = Math.floor(today.getMonth() / 3) * 3;
             start = new Date(today.getFullYear(), qStartMonth, 1);
         } else {
-            // last 30 days
             start = new Date(today);
             start.setDate(start.getDate() - 30);
         }
@@ -340,11 +550,6 @@
         }
     }
 
-    function toggleScheduled() {
-        alert('בקרוב: דוחות מתוזמנים');
-    }
-
-    // Export current visible table (including footer) to Excel (HTML-based .xls)
     function exportVisibleExcel() {
         const table = document.getElementById('reportsTable');
         if (!table) return;
@@ -353,7 +558,6 @@
         const endDate = isHebrewMode ? document.getElementById('endDate').value : endDateGregorian;
         const grade = document.getElementById('reportGrade').value || 'הכל';
 
-        // Build minimal HTML workbook with RTL and basic styles
         const html = `<!DOCTYPE html><html lang="he" dir="rtl"><head>
             <meta charset="UTF-8">
             <style>
@@ -373,12 +577,11 @@
         const a = document.createElement('a');
         const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
         a.href = url;
-        a.download = `דוח_נוכחות_כפי_שמוצג_${ts}.xls`;
+        a.download = `דוח_נוכחות_${ts}.xls`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
-
 </script>
 {% endblock %}

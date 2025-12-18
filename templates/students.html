@@ -14,9 +14,62 @@
         <button class="btn btn-success" onclick="openAddStudentDialog()">
             <span>➕</span> הוסף תלמיד חדש
         </button>
+        <button class="btn btn-info" onclick="openImportModal()">
+            <span>📥</span> ייבוא מ-Excel
+        </button>
+        <a href="/api/students/template" class="btn btn-secondary">
+            <span>📄</span> הורד תבנית
+        </a>
         <button class="btn btn-secondary" onclick="refreshStudents()">
             <span>🔄</span> רענן
         </button>
+    </div>
+    
+    <!-- Import Modal -->
+    <div id="importModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📥 ייבוא תלמידים מ-Excel</h2>
+                <span class="close" onclick="closeImportModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="import-instructions">
+                    <h3>הוראות ייבוא:</h3>
+                    <ol>
+                        <li>הורד את <a href="/api/students/template">תבנית הייבוא</a></li>
+                        <li>מלא את פרטי התלמידים בקובץ</li>
+                        <li>העלה את הקובץ כאן</li>
+                    </ol>
+                    <p><strong>עמודות חובה:</strong> שם פרטי, שם משפחה</p>
+                </div>
+                
+                <div class="file-upload-area" id="dropZone">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="handleFileSelect(event)" style="display: none;">
+                    <div class="upload-icon">📁</div>
+                    <p>גרור קובץ Excel לכאן</p>
+                    <p>או</p>
+                    <button class="btn btn-primary" onclick="document.getElementById('excelFile').click()">
+                        בחר קובץ
+                    </button>
+                    <p id="selectedFileName" class="file-name"></p>
+                </div>
+                
+                <div id="importProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="progressText">מייבא...</p>
+                </div>
+                
+                <div id="importResult" style="display: none;" class="import-result"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeImportModal()">סגור</button>
+                <button class="btn btn-primary" id="importBtn" onclick="startImport()" disabled>
+                    ייבא תלמידים
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Students Table with Filters -->
@@ -605,6 +658,109 @@
         window.location.href = `/student-report?student_id=${studentId}`;
     }
 
+    // ==================== IMPORT FUNCTIONALITY ====================
+    
+    let selectedFile = null;
+    
+    function openImportModal() {
+        document.getElementById('importModal').style.display = 'block';
+        document.getElementById('importResult').style.display = 'none';
+        document.getElementById('importProgress').style.display = 'none';
+        document.getElementById('selectedFileName').textContent = '';
+        document.getElementById('excelFile').value = '';
+        document.getElementById('importBtn').disabled = true;
+        selectedFile = null;
+    }
+    
+    function closeImportModal() {
+        document.getElementById('importModal').style.display = 'none';
+    }
+    
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (file) {
+            selectedFile = file;
+            document.getElementById('selectedFileName').textContent = `📄 ${file.name}`;
+            document.getElementById('importBtn').disabled = false;
+        }
+    }
+    
+    // Drag and drop
+    const dropZone = document.getElementById('dropZone');
+    if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                selectedFile = file;
+                document.getElementById('selectedFileName').textContent = `📄 ${file.name}`;
+                document.getElementById('importBtn').disabled = false;
+            } else {
+                alert('יש להעלות קובץ Excel בלבד (.xlsx או .xls)');
+            }
+        });
+    }
+    
+    function startImport() {
+        if (!selectedFile) {
+            alert('בחר קובץ לייבוא');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        document.getElementById('importProgress').style.display = 'block';
+        document.getElementById('importBtn').disabled = true;
+        document.getElementById('progressText').textContent = 'מייבא תלמידים...';
+        
+        fetch('/api/students/import', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(result => {
+            document.getElementById('importProgress').style.display = 'none';
+            document.getElementById('importResult').style.display = 'block';
+            
+            if (result.success) {
+                let html = `<div class="success-msg">✅ ${result.message}</div>`;
+                if (result.errors && result.errors.length > 0) {
+                    html += `<div class="warning-msg">⚠️ ${result.total_errors} שגיאות:</div>`;
+                    html += '<ul class="error-list">';
+                    result.errors.forEach(err => {
+                        html += `<li>${err}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                document.getElementById('importResult').innerHTML = html;
+                
+                // Refresh the students list
+                loadStudents();
+            } else {
+                document.getElementById('importResult').innerHTML = 
+                    `<div class="error-msg">❌ שגיאה: ${result.error}</div>`;
+            }
+        })
+        .catch(err => {
+            console.error('Import error:', err);
+            document.getElementById('importProgress').style.display = 'none';
+            document.getElementById('importResult').style.display = 'block';
+            document.getElementById('importResult').innerHTML = 
+                '<div class="error-msg">❌ שגיאה בייבוא</div>';
+        });
+    }
+
     // Load on page load
     // Add event listener for "all cities" checkbox
     document.addEventListener('DOMContentLoaded', function() {
@@ -616,4 +772,106 @@
 
     window.addEventListener('load', loadStudents);
 </script>
+
+<style>
+/* Import Modal Styles */
+.import-instructions {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.import-instructions h3 {
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.import-instructions ol {
+    margin-right: 20px;
+    margin-bottom: 10px;
+}
+
+.import-instructions li {
+    margin-bottom: 5px;
+}
+
+.file-upload-area {
+    border: 2px dashed #ccc;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    margin-bottom: 20px;
+    transition: all 0.3s;
+}
+
+.file-upload-area.drag-over {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.file-name {
+    margin-top: 15px;
+    color: #22c55e;
+    font-weight: 600;
+}
+
+.progress-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #3b82f6;
+    width: 0%;
+    animation: progress 2s ease-in-out infinite;
+}
+
+@keyframes progress {
+    0% { width: 0%; }
+    50% { width: 70%; }
+    100% { width: 100%; }
+}
+
+.import-result {
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.success-msg {
+    color: #22c55e;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.warning-msg {
+    color: #f59e0b;
+    margin-bottom: 5px;
+}
+
+.error-msg {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.error-list {
+    margin-right: 20px;
+    font-size: 12px;
+    color: #666;
+}
+
+.btn-info {
+    background: #3b82f6;
+    color: white;
+}
+</style>
 {% endblock %}

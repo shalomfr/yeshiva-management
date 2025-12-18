@@ -2162,3 +2162,248 @@ tbody tr:hover {
 .students-container .table-wrapper {
     padding: 0 25px 25px 25px;
 }
+
+/* ==================== MOBILE RESPONSIVE DESIGN ==================== */
+
+/* Hamburger Menu Button */
+.hamburger-btn {
+    display: none;
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 1001;
+    width: 50px;
+    height: 50px;
+    background: #4A90E2;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.hamburger-btn span {
+    display: block;
+    width: 24px;
+    height: 3px;
+    background: white;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+.hamburger-btn.active span:nth-child(1) {
+    transform: rotate(45deg) translate(6px, 6px);
+}
+
+.hamburger-btn.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.hamburger-btn.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(6px, -6px);
+}
+
+/* Mobile Overlay */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+    body {
+        zoom: 100% !important;
+    }
+    
+    .hamburger-btn {
+        display: flex;
+    }
+    
+    .sidebar {
+        position: fixed;
+        top: 0;
+        right: -300px;
+        height: 100vh;
+        width: 280px;
+        z-index: 1000;
+        transition: right 0.3s ease;
+        padding-top: 70px;
+    }
+    
+    .sidebar.open {
+        right: 0;
+    }
+    
+    .content {
+        margin-right: 0;
+        padding: 80px 15px 20px 15px;
+    }
+    
+    /* Page Header Mobile */
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .page-header h1 {
+        font-size: 22px;
+    }
+    
+    .header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    
+    .header-actions .btn {
+        flex: 1;
+        min-width: 120px;
+        justify-content: center;
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+    
+    /* Stats Row Mobile */
+    .stats-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    
+    .stat-card {
+        padding: 15px;
+    }
+    
+    .card-value {
+        font-size: 24px;
+    }
+    
+    .card-label {
+        font-size: 11px;
+    }
+    
+    /* Tables Mobile */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .students-table,
+    .attendance-table,
+    .reports-table {
+        min-width: 600px;
+    }
+    
+    /* Forms Mobile */
+    .filters-row {
+        flex-direction: column;
+    }
+    
+    .field {
+        width: 100%;
+    }
+    
+    /* Dashboard Grid Mobile */
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    /* Quick Access Mobile */
+    .quick-access-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    
+    .quick-access-btn {
+        padding: 12px 8px;
+    }
+    
+    .qa-label {
+        font-size: 10px;
+    }
+    
+    /* Charts Mobile */
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .chart-wide {
+        grid-column: span 1;
+    }
+    
+    /* Class Selector Mobile */
+    .class-selector {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 10px;
+    }
+    
+    .class-tab {
+        flex-shrink: 0;
+        min-width: 80px;
+    }
+    
+    /* Modal Mobile */
+    .modal-content {
+        width: 95%;
+        margin: 20px auto;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    /* Toolbar Mobile */
+    .reports-toolbar {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .toolbar-left,
+    .toolbar-right {
+        width: 100%;
+    }
+    
+    .segment {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    .seg-btn {
+        flex: 1;
+        min-width: 70px;
+        font-size: 11px;
+        padding: 8px;
+    }
+}
+
+/* Small Mobile */
+@media (max-width: 480px) {
+    .stats-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .quick-access-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .header-actions .btn span:first-child {
+        display: none;
+    }
+    
+    .mini-table th,
+    .mini-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+}

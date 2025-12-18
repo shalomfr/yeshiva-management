@@ -96,7 +96,18 @@ def dashboard():
         'hebrew_date': heb_date.hebrew_date_string()
     }
 
-    return render_template('dashboard.html', stats=stats)
+    # נתונים דינמיים ללוח הבקרה
+    weekly_attendance = db.get_weekly_attendance_by_day()
+    low_attendance_students = db.get_low_attendance_students(threshold=80, days=30)
+    upcoming_exams = exam_db.get_upcoming_exams(days=7)
+    recent_activities = db.get_recent_activities(limit=10)
+
+    return render_template('dashboard.html', 
+                         stats=stats,
+                         weekly_attendance=weekly_attendance,
+                         low_attendance=low_attendance_students,
+                         upcoming_exams=upcoming_exams,
+                         activities=recent_activities)
 
 @app.route('/students')
 @login_required
@@ -128,6 +139,39 @@ def settings():
     return render_template('settings.html')
 
 # ==================== API ENDPOINTS ====================
+
+@app.route('/api/search')
+@login_required
+def api_global_search():
+    """API: חיפוש גלובלי - תלמידים, מבחנים, דפים"""
+    query = request.args.get('q', '').strip().lower()
+    
+    if len(query) < 1:
+        return jsonify({'students': [], 'exams': []})
+    
+    # חיפוש תלמידים
+    students = db.get_all_students(include_inactive=False)
+    matching_students = []
+    
+    for student in students:
+        student_id, first_name, last_name = student[0], student[1], student[2]
+        current_grade = student[15] if len(student) > 15 else ''
+        full_name = f"{first_name} {last_name}".lower()
+        
+        if query in full_name or query in first_name.lower() or query in last_name.lower():
+            matching_students.append({
+                'id': student_id,
+                'first_name': first_name,
+                'last_name': last_name,
+                'grade': current_grade or ''
+            })
+    
+    # הגבלה ל-10 תוצאות
+    matching_students = matching_students[:10]
+    
+    return jsonify({
+        'students': matching_students
+    })
 
 @app.route('/api/students')
 def api_get_students():
@@ -799,6 +843,151 @@ def api_add_students_bulk():
         return jsonify({'success': True, 'added': added_count}), 201
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/students/import', methods=['POST'])
+@login_required
+def api_import_students():
+    """API: ייבוא תלמידים מקובץ Excel"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'לא נבחר קובץ'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'לא נבחר קובץ'}), 400
+        
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'error': 'פורמט קובץ לא נתמך. יש להעלות קובץ Excel'}), 400
+        
+        import openpyxl
+        from io import BytesIO
+        
+        # Read Excel file
+        wb = openpyxl.load_workbook(BytesIO(file.read()))
+        ws = wb.active
+        
+        # Get headers from first row
+        headers = []
+        for cell in ws[1]:
+            headers.append(str(cell.value).strip() if cell.value else '')
+        
+        # Map Hebrew headers to field names
+        header_map = {
+            'שם פרטי': 'first_name',
+            'שם משפחה': 'last_name',
+            'תעודת זהות': 'id_number',
+            'תאריך לידה': 'birth_date_hebrew',
+            'כתובת': 'address',
+            'עיר': 'city',
+            'שם האב': 'father_name',
+            'ת.ז. אב': 'father_id_number',
+            'שם האם': 'mother_name',
+            'ת.ז. אם': 'mother_id_number',
+            'טלפון אב': 'father_phone',
+            'טלפון אם': 'mother_phone',
+            'טלפון בית': 'home_phone',
+            'שיעור': 'current_grade',
+            'מסגרת': 'framework_type',
+            'הערות': 'notes'
+        }
+        
+        # Create column index map
+        col_map = {}
+        for i, header in enumerate(headers):
+            if header in header_map:
+                col_map[header_map[header]] = i
+        
+        # Check required columns
+        if 'first_name' not in col_map or 'last_name' not in col_map:
+            return jsonify({
+                'success': False, 
+                'error': 'חסרות עמודות חובה: שם פרטי, שם משפחה'
+            }), 400
+        
+        # Import students
+        added_count = 0
+        errors = []
+        
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            try:
+                student_data = {}
+                for field, col_idx in col_map.items():
+                    value = row[col_idx] if col_idx < len(row) else None
+                    student_data[field] = str(value).strip() if value else ''
+                
+                # Skip empty rows
+                if not student_data.get('first_name') and not student_data.get('last_name'):
+                    continue
+                
+                # Set defaults
+                if not student_data.get('current_grade'):
+                    student_data['current_grade'] = "א'"
+                if not student_data.get('framework_type'):
+                    student_data['framework_type'] = 'ישיבה קטנה'
+                
+                db.add_student(student_data)
+                added_count += 1
+                
+            except Exception as e:
+                errors.append(f"שורה {row_num}: {str(e)}")
+        
+        result = {
+            'success': True,
+            'added': added_count,
+            'message': f'נוספו {added_count} תלמידים בהצלחה'
+        }
+        
+        if errors:
+            result['errors'] = errors[:10]  # Limit errors shown
+            result['total_errors'] = len(errors)
+        
+        return jsonify(result), 201
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/api/students/template')
+@login_required
+def api_download_template():
+    """API: הורדת תבנית Excel לייבוא תלמידים"""
+    import openpyxl
+    from io import BytesIO
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "תלמידים"
+    
+    # Add headers
+    headers = [
+        'שם פרטי', 'שם משפחה', 'תעודת זהות', 'תאריך לידה',
+        'כתובת', 'עיר', 'שם האב', 'ת.ז. אב', 'שם האם', 'ת.ז. אם',
+        'טלפון אב', 'טלפון אם', 'טלפון בית', 'שיעור', 'מסגרת', 'הערות'
+    ]
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = openpyxl.styles.Font(bold=True)
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
+    
+    # Add example row
+    example = ['ישראל', 'ישראלי', '123456789', "א' בתשרי תשפ\"ה",
+               'הרצל 1', 'ירושלים', 'אברהם', '111111111', 'שרה', '222222222',
+               '050-1234567', '050-7654321', '02-1234567', "א'", 'ישיבה קטנה', '']
+    
+    for col, value in enumerate(example, 1):
+        ws.cell(row=2, column=col, value=value)
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='תבנית_ייבוא_תלמידים.xlsx'
+    )
 
 # ==================== EXAMS ROUTES ====================
 
