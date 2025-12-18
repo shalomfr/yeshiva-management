@@ -54,9 +54,17 @@
                     <span class="nav-icon">⚙️</span>
                     <span class="nav-text">הגדרות</span>
                 </a>
+                <a href="/feedback" class="nav-item {% if request.endpoint == 'feedback' %}active{% endif %}">
+                    <span class="nav-icon">💬</span>
+                    <span class="nav-text">משוב למתכנת</span>
+                </a>
             </nav>
 
             <div class="sidebar-footer">
+                <a href="/logout" class="nav-item logout-btn">
+                    <span class="nav-icon">🚪</span>
+                    <span class="nav-text">התנתק</span>
+                </a>
                 <div class="version-info">
                     <p>גרסה 2.0</p>
                     <p class="status">● פעיל</p>
