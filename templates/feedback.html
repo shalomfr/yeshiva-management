@@ -11,6 +11,15 @@
             <p>שלח הערות, בקשות שיפור או דיווחי באגים</p>
         </div>
         <div class="header-actions">
+            <button class="btn btn-outline" onclick="copyAllFeedback()">
+                <span>📋</span> העתק הכל
+            </button>
+            <button class="btn btn-outline" onclick="exportFeedback('csv')">
+                <span>📄</span> ייצוא CSV
+            </button>
+            <button class="btn btn-outline" onclick="exportFeedback('json')">
+                <span>📦</span> ייצוא JSON
+            </button>
             <button class="btn btn-primary" onclick="openNewFeedbackModal()">
                 <span>➕</span> הוספת משוב חדש
             </button>
@@ -324,6 +333,135 @@ window.onclick = function(event) {
         event.target.style.display = 'none';
     }
 };
+
+// Global variable to store feedback for export
+let allFeedbackData = [];
+
+// Override loadFeedback to store data for export
+const originalLoadFeedback = loadFeedback;
+loadFeedback = function() {
+    let url = '/api/feedback';
+    if (currentFilter) {
+        url += `?status=${encodeURIComponent(currentFilter)}`;
+    }
+
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            allFeedbackData = data;  // Store for export
+            renderFeedbackList(data);
+            updateStats(data);
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            document.getElementById('feedbackList').innerHTML = '<div class="error">שגיאה בטעינת המשובים</div>';
+        });
+};
+
+function copyAllFeedback() {
+    if (!allFeedbackData || allFeedbackData.length === 0) {
+        alert('אין הערות להעתקה');
+        return;
+    }
+
+    let text = '=== משובים למתכנת ===\n\n';
+    text += `תאריך ייצוא: ${new Date().toLocaleDateString('he-IL')}\n`;
+    text += `סה"כ משובים: ${allFeedbackData.length}\n`;
+    text += '─'.repeat(40) + '\n\n';
+
+    allFeedbackData.forEach((item, index) => {
+        text += `[${index + 1}] ${item.title}\n`;
+        text += `קטגוריה: ${item.category} | עדיפות: ${item.priority} | סטטוס: ${item.status}\n`;
+        text += `תאריך: ${new Date(item.created_at).toLocaleDateString('he-IL')}\n`;
+        text += `תיאור: ${item.description}\n`;
+        if (item.notes) {
+            text += `הערות: ${item.notes}\n`;
+        }
+        text += '─'.repeat(40) + '\n\n';
+    });
+
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('✅ ההערות הועתקו ללוח!');
+    }).catch(err => {
+        console.error('Copy failed:', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('✅ ההערות הועתקו ללוח!');
+    });
+}
+
+function exportFeedback(format) {
+    if (!allFeedbackData || allFeedbackData.length === 0) {
+        alert('אין הערות לייצוא');
+        return;
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    let content, filename, mimeType;
+
+    if (format === 'csv') {
+        // Create CSV content
+        const headers = ['מספר', 'כותרת', 'קטגוריה', 'עדיפות', 'סטטוס', 'תיאור', 'הערות', 'תאריך יצירה'];
+        const rows = allFeedbackData.map(item => [
+            item.id,
+            `"${(item.title || '').replace(/"/g, '""')}"`,
+            item.category,
+            item.priority,
+            item.status,
+            `"${(item.description || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+            `"${(item.notes || '').replace(/"/g, '""')}"`,
+            new Date(item.created_at).toLocaleDateString('he-IL')
+        ]);
+        
+        // Add BOM for Hebrew support in Excel
+        content = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
+        filename = `feedback_export_${date}.csv`;
+        mimeType = 'text/csv;charset=utf-8';
+    } else {
+        // JSON export
+        content = JSON.stringify(allFeedbackData, null, 2);
+        filename = `feedback_export_${date}.json`;
+        mimeType = 'application/json;charset=utf-8';
+    }
+
+    // Download file
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(`✅ הקובץ ${filename} הורד בהצלחה!`);
+}
+
+function showToast(message) {
+    // Remove existing toast
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) existingToast.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+
+    // Animate in
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
 </script>
 
 <style>
@@ -338,6 +476,14 @@ window.onclick = function(event) {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 25px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .page-header h1 {
@@ -684,6 +830,55 @@ window.onclick = function(event) {
 }
 
 .error { color: #ef4444; }
+
+/* Outline Button */
+.btn-outline {
+    background: white;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+}
+
+.btn-outline:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+/* Toast Notification */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1f2937;
+    color: white;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    z-index: 10000;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+/* Responsive header */
+@media (max-width: 768px) {
+    .header-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .header-actions .btn {
+        flex: 1;
+        min-width: 120px;
+        justify-content: center;
+    }
+}
 </style>
 {% endblock %}
 
