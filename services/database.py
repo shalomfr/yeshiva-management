@@ -918,102 +918,111 @@ class YeshivaDatabase:
     def get_weekly_attendance_by_day(self):
         """קבלת אחוזי נוכחות לפי ימים בשבוע הנוכחי"""
         from datetime import date, timedelta
-        from pyluach import dates
         
-        today = date.today()
-        # מציאת יום ראשון של השבוע (בישראל)
-        days_since_sunday = (today.weekday() + 1) % 7
-        week_start = today - timedelta(days=days_since_sunday)
-        
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        
-        # קבלת מספר התלמידים הפעילים
-        cursor.execute("SELECT COUNT(*) FROM students WHERE status = 'פעיל'")
-        total_students = cursor.fetchone()[0]
-        
-        if total_students == 0:
+        try:
+            from pyluach import dates
+            
+            today = date.today()
+            # מציאת יום ראשון של השבוע (בישראל)
+            days_since_sunday = (today.weekday() + 1) % 7
+            week_start = today - timedelta(days=days_since_sunday)
+            
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            # קבלת מספר התלמידים הפעילים
+            cursor.execute("SELECT COUNT(*) FROM students WHERE status = 'פעיל'")
+            total_students = cursor.fetchone()[0]
+            
+            if total_students == 0:
+                conn.close()
+                return [{'day': d, 'percent': 0, 'is_future': False} for d in ['א', 'ב', 'ג', 'ד', 'ה', 'ו']]
+            
+            days_hebrew = ['א', 'ב', 'ג', 'ד', 'ה', 'ו']
+            result = []
+            
+            for i in range(6):  # ראשון עד שישי
+                day = week_start + timedelta(days=i)
+                if day > today:
+                    result.append({'day': days_hebrew[i], 'percent': 0, 'is_future': True})
+                    continue
+                
+                # קבלת נוכחות ליום זה
+                heb_date = dates.HebrewDate.from_pydate(day)
+                date_hebrew = heb_date.hebrew_date_string()
+                
+                cursor.execute('''
+                    SELECT COUNT(*) FROM attendance 
+                    WHERE date_hebrew = ? AND status = 'נוכח'
+                ''', (date_hebrew,))
+                present_count = cursor.fetchone()[0]
+                
+                percent = int((present_count / total_students) * 100) if total_students > 0 else 0
+                result.append({'day': days_hebrew[i], 'percent': percent, 'is_future': False})
+            
             conn.close()
-            return []
-        
-        days_hebrew = ['א', 'ב', 'ג', 'ד', 'ה', 'ו']
-        result = []
-        
-        for i in range(6):  # ראשון עד שישי
-            day = week_start + timedelta(days=i)
-            if day > today:
-                result.append({'day': days_hebrew[i], 'percent': 0, 'is_future': True})
-                continue
-            
-            # קבלת נוכחות ליום זה
-            heb_date = dates.HebrewDate.from_pydate(day)
-            date_hebrew = heb_date.hebrew_date_string()
-            
-            cursor.execute('''
-                SELECT COUNT(*) FROM attendance 
-                WHERE date_hebrew = ? AND status = 'נוכח'
-            ''', (date_hebrew,))
-            present_count = cursor.fetchone()[0]
-            
-            percent = int((present_count / total_students) * 100) if total_students > 0 else 0
-            result.append({'day': days_hebrew[i], 'percent': percent, 'is_future': False})
-        
-        conn.close()
-        return result
+            return result
+        except Exception as e:
+            print(f"Error in get_weekly_attendance_by_day: {e}")
+            return [{'day': d, 'percent': 0, 'is_future': False} for d in ['א', 'ב', 'ג', 'ד', 'ה', 'ו']]
 
     def get_low_attendance_students(self, threshold=80, days=30):
         """קבלת תלמידים עם נוכחות נמוכה"""
         from datetime import date, timedelta
         
-        end_date = date.today()
-        start_date = end_date - timedelta(days=days)
-        
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        
-        # קבלת כל התלמידים הפעילים
-        cursor.execute("SELECT id, first_name, last_name, current_grade FROM students WHERE status = 'פעיל'")
-        students = cursor.fetchall()
-        
-        low_attendance = []
-        
-        for student in students:
-            student_id, first_name, last_name, grade = student
+        try:
+            end_date = date.today()
+            start_date = end_date - timedelta(days=days)
             
-            # ספירת נוכחות
-            cursor.execute('''
-                SELECT status, COUNT(*) as count
-                FROM attendance
-                WHERE student_id = ? 
-                    AND date_gregorian BETWEEN ? AND ?
-                GROUP BY status
-            ''', (student_id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
             
-            results = cursor.fetchall()
-            present = 0
-            total = 0
+            # קבלת כל התלמידים הפעילים
+            cursor.execute("SELECT id, first_name, last_name, current_grade FROM students WHERE status = 'פעיל'")
+            students = cursor.fetchall()
             
-            for status, count in results:
-                total += count
-                if status == 'נוכח':
-                    present = count
+            low_attendance = []
             
-            if total > 0:
-                percent = int((present / total) * 100)
-                if percent < threshold:
-                    low_attendance.append({
-                        'id': student_id,
-                        'name': f"{first_name} {last_name}",
-                        'grade': grade,
-                        'percent': percent,
-                        'present': present,
-                        'total': total
-                    })
-        
-        conn.close()
-        # מיון לפי אחוז נוכחות (הנמוך ביותר קודם)
-        low_attendance.sort(key=lambda x: x['percent'])
-        return low_attendance[:10]  # מחזיר עד 10 תלמידים
+            for student in students:
+                student_id, first_name, last_name, grade = student
+                
+                # ספירת נוכחות
+                cursor.execute('''
+                    SELECT status, COUNT(*) as count
+                    FROM attendance
+                    WHERE student_id = ? 
+                        AND date_gregorian BETWEEN ? AND ?
+                    GROUP BY status
+                ''', (student_id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+                
+                results = cursor.fetchall()
+                present = 0
+                total = 0
+                
+                for status, count in results:
+                    total += count
+                    if status == 'נוכח':
+                        present = count
+                
+                if total > 0:
+                    percent = int((present / total) * 100)
+                    if percent < threshold:
+                        low_attendance.append({
+                            'id': student_id,
+                            'name': f"{first_name} {last_name}",
+                            'grade': grade,
+                            'percent': percent,
+                            'present': present,
+                            'total': total
+                        })
+            
+            conn.close()
+            # מיון לפי אחוז נוכחות (הנמוך ביותר קודם)
+            low_attendance.sort(key=lambda x: x['percent'])
+            return low_attendance[:10]  # מחזיר עד 10 תלמידים
+        except Exception as e:
+            print(f"Error in get_low_attendance_students: {e}")
+            return []
 
     def get_upcoming_exams(self, days=7):
         """קבלת מבחנים קרובים"""
@@ -1025,16 +1034,23 @@ class YeshivaDatabase:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT id, title, subject, grade, scheduled_date, status
-            FROM exams
-            WHERE scheduled_date BETWEEN ? AND ?
-                AND status != 'draft'
-            ORDER BY scheduled_date ASC
-            LIMIT 10
-        ''', (today.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+        try:
+            # חיפוש מבחנים לפי student_exams
+            cursor.execute('''
+                SELECT DISTINCT e.id, e.title, e.subject, e.grade, se.scheduled_date, e.status
+                FROM exams e
+                JOIN student_exams se ON e.id = se.exam_id
+                WHERE se.scheduled_date BETWEEN ? AND ?
+                    AND e.status != 'draft'
+                ORDER BY se.scheduled_date ASC
+                LIMIT 10
+            ''', (today.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+            
+            results = cursor.fetchall()
+        except Exception as e:
+            print(f"Error in get_upcoming_exams: {e}")
+            results = []
         
-        results = cursor.fetchall()
         conn.close()
         
         exams = []
